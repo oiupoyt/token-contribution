@@ -53,52 +53,78 @@ export function apply(ctx: any) {
 
     root.render(<ModalController />);
 
-    // 3. Observe DOM for in-session token usage dialog to attach "View Heatmap" button
+    // 3. Observe DOM for in-session token usage dialog: strictly single button
     const observer = new MutationObserver(() => {
-      // Find the open session stats dialog
-      const statDialogs = document.querySelectorAll(
-        'div[role="dialog"][aria-label*="usage" i], div[role="dialog"][aria-label*="Token" i], [data-session-stats-usage]'
-      );
+      // Find the dl with data-session-stats-usage
+      const usageList = document.querySelector('[data-session-stats-usage]');
+      if (!usageList) return;
 
-      statDialogs.forEach((dialog) => {
-        if (dialog.querySelector(".dsh-heatmap-trigger-btn")) return;
+      const dialogContainer = usageList.closest('div[role="dialog"]') || usageList.parentElement;
+      if (!dialogContainer) return;
 
-        const button = document.createElement("button");
-        button.className = "dsh-heatmap-trigger-btn";
-        button.type = "button";
-        button.innerHTML = "<span>View 12-Month Activity Heatmap →</span>";
-        button.style.cssText = `
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 100%;
-          margin-top: 12px;
-          padding: 8px 12px;
-          background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12));
-          border: 1px solid var(--dsw-alias-border-l2, #494949);
-          border-radius: 8px;
-          color: var(--dsw-alias-brand-primary, #6366f1);
-          font-size: 12px;
-          font-weight: 550;
-          cursor: pointer;
-          transition: background 0.15s ease, border-color 0.15s ease;
-        `;
-        button.onmouseenter = () => {
-          button.style.background = "var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.2))";
-          button.style.borderColor = "var(--dsw-alias-brand-primary, #6366f1)";
-        };
-        button.onmouseleave = () => {
-          button.style.background = "var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12))";
-          button.style.borderColor = "var(--dsw-alias-border-l2, #494949)";
-        };
-        button.onclick = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+      // Strictly ensure only one button is ever attached
+      if (dialogContainer.querySelector(".dsh-heatmap-trigger-btn") || document.querySelector(".dsh-heatmap-trigger-btn")) {
+        return;
+      }
+
+      const button = document.createElement("button");
+      button.className = "dsh-heatmap-trigger-btn";
+      button.type = "button";
+      button.innerHTML = "<span>View Token Usage Heatmap →</span>";
+      button.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        margin-top: 12px;
+        padding: 8px 12px;
+        background: rgba(79, 70, 229, 0.12);
+        border: 1px solid rgba(79, 70, 229, 0.35);
+        border-radius: 8px;
+        color: var(--dsw-alias-brand-primary, #6366f1);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease;
+      `;
+      button.onmouseenter = () => {
+        button.style.background = "rgba(79, 70, 229, 0.22)";
+        button.style.borderColor = "var(--dsw-alias-brand-primary, #6366f1)";
+      };
+      button.onmouseleave = () => {
+        button.style.background = "rgba(79, 70, 229, 0.12)";
+        button.style.borderColor = "rgba(79, 70, 229, 0.35)";
+      };
+      button.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Try navigating to Settings -> Token Heatmap
+        const settingsTrigger = document.querySelector(
+          'button[aria-label*="Setting" i], [data-sidebar-settings] button, button.settings'
+        );
+
+        if (settingsTrigger) {
+          (settingsTrigger as HTMLElement).click();
+          setTimeout(() => {
+            const heatmapTab = Array.from(document.querySelectorAll("*")).find(
+              (el) =>
+                el.textContent?.trim() === "Token Heatmap" &&
+                (el.tagName === "BUTTON" || el.tagName === "DIV" || el.getAttribute("role") === "tab" || el.classList.contains("ant-list-item"))
+            );
+            if (heatmapTab) {
+              (heatmapTab as HTMLElement).click();
+            } else {
+              window.dispatchEvent(new CustomEvent("dsh:open-token-heatmap"));
+            }
+          }, 120);
+        } else {
+          // Open direct interactive modal
           window.dispatchEvent(new CustomEvent("dsh:open-token-heatmap"));
-        };
+        }
+      };
 
-        dialog.appendChild(button);
-      });
+      dialogContainer.appendChild(button);
     });
 
     observer.observe(document.body, { childList: true, subtree: true });

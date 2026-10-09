@@ -13,6 +13,18 @@ export interface DayStats {
   level?: number; // 0..4
 }
 
+export interface SessionSummary {
+  id: string;
+  title: string;
+  createdAt: number;
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  turns: number;
+  days: Record<string, DayStats>;
+}
+
 export interface SummaryStats {
   totalTokens: number;
   totalInputTokens: number;
@@ -29,13 +41,14 @@ export interface SummaryStats {
 export interface HeatmapResponse {
   summary: SummaryStats;
   days: Record<string, DayStats>;
+  sessions: SessionSummary[];
   startDate: string;
   endDate: string;
 }
 
 interface CacheEntry {
   mtimeMs: number;
-  days: Record<string, DayStats>;
+  session: SessionSummary;
 }
 
 const fileCache = new Map<string, CacheEntry>();
@@ -58,53 +71,87 @@ function findSessionFiles(dir: string): string[] {
   return results;
 }
 
-async function parseSessionFile(filePath: string): Promise<Record<string, DayStats>> {
+async function parseSessionFile(filePath: string): Promise<SessionSummary | null> {
   try {
     const stat = fs.statSync(filePath);
     const cached = fileCache.get(filePath);
     if (cached && cached.mtimeMs === stat.mtimeMs) {
-      return cached.days;
+      return cached.session;
     }
 
     const isZstd = filePath.endsWith(".zstd");
     const days: Record<string, DayStats> = {};
+    let sessionId = path.basename(path.dirname(filePath));
+    let title = "";
+    let createdAt = stat.birthtimeMs || stat.mtimeMs;
+    let totalTokens = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let totalCacheReadTokens = 0;
+    let totalTurns = 0;
 
     await new Promise<void>((resolve) => {
       let buffer = "";
       const handleLine = (line: string) => {
-        if (!line.includes('"usage"')) return;
-        try {
-          const obj = JSON.parse(line);
-          const time = obj.time || (obj.data && obj.data.time);
-          const usage = obj.usage || (obj.data && obj.data.usage);
-          if (time && usage) {
-            const d = new Date(time);
-            const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-            const input = Number(usage.inputTokens) || 0;
-            const output = Number(usage.outputTokens) || 0;
-            const cacheRead = Number(usage.cacheReadTokens) || 0;
-            const cacheWrite = Number(usage.cacheWriteTokens) || 0;
-            const total = input + output + cacheRead;
+        if (line.includes('"type":"session"')) {
+          try {
+            const obj = JSON.parse(line);
+            if (obj.id) sessionId = obj.id;
+            if (obj.createdAt) createdAt = obj.createdAt;
+          } catch {}
+        }
+        if (!title && line.includes('"session/title"')) {
+          try {
+            const obj = JSON.parse(line);
+            if (obj.data?.title) title = obj.data.title;
+          } catch {}
+        }
+        if (!title && line.includes('"subagent/descriptor"')) {
+          try {
+            const obj = JSON.parse(line);
+            if (obj.data?.label) title = obj.data.label;
+          } catch {}
+        }
+        if (line.includes('"usage"')) {
+          try {
+            const obj = JSON.parse(line);
+            const time = obj.time || (obj.data && obj.data.time);
+            const usage = obj.usage || (obj.data && obj.data.usage);
+            if (time && usage) {
+              const d = new Date(time);
+              const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              const input = Number(usage.inputTokens) || 0;
+              const output = Number(usage.outputTokens) || 0;
+              const cacheRead = Number(usage.cacheReadTokens) || 0;
+              const cacheWrite = Number(usage.cacheWriteTokens) || 0;
+              const total = input + output + cacheRead;
 
-            if (!days[dateKey]) {
-              days[dateKey] = {
-                totalTokens: 0,
-                inputTokens: 0,
-                outputTokens: 0,
-                cacheReadTokens: 0,
-                cacheWriteTokens: 0,
-                turns: 0,
-              };
+              if (!days[dateKey]) {
+                days[dateKey] = {
+                  totalTokens: 0,
+                  inputTokens: 0,
+                  outputTokens: 0,
+                  cacheReadTokens: 0,
+                  cacheWriteTokens: 0,
+                  turns: 0,
+                };
+              }
+              days[dateKey].totalTokens += total;
+              days[dateKey].inputTokens += input;
+              days[dateKey].outputTokens += output;
+              days[dateKey].cacheReadTokens += cacheRead;
+              days[dateKey].cacheWriteTokens += cacheWrite;
+              days[dateKey].turns += 1;
+
+              totalTokens += total;
+              totalInputTokens += input;
+              totalOutputTokens += output;
+              totalCacheReadTokens += cacheRead;
+              totalTurns += 1;
             }
-            days[dateKey].totalTokens += total;
-            days[dateKey].inputTokens += input;
-            days[dateKey].outputTokens += output;
-            days[dateKey].cacheReadTokens += cacheRead;
-            days[dateKey].cacheWriteTokens += cacheWrite;
-            days[dateKey].turns += 1;
+          } catch {
+            // Ignore malformed lines
           }
-        } catch {
-          // Ignore malformed lines
         }
       };
 
@@ -143,22 +190,37 @@ async function parseSessionFile(filePath: string): Promise<Record<string, DaySta
       }
     });
 
-    fileCache.set(filePath, { mtimeMs: stat.mtimeMs, days });
-    return days;
+    const session: SessionSummary = {
+      id: sessionId,
+      title: title || `Session ${sessionId.slice(0, 8)}`,
+      createdAt,
+      totalTokens,
+      inputTokens: totalInputTokens,
+      outputTokens: totalOutputTokens,
+      cacheReadTokens: totalCacheReadTokens,
+      turns: totalTurns,
+      days,
+    };
+
+    fileCache.set(filePath, { mtimeMs: stat.mtimeMs, session });
+    return session;
   } catch {
-    return {};
+    return null;
   }
 }
 
 export async function aggregateTokens(customSessionsRoot?: string): Promise<HeatmapResponse> {
   const sessionsRoot = customSessionsRoot || path.join(os.homedir(), ".dsh", "sessions");
   const files = findSessionFiles(sessionsRoot);
-  const parsedResults = await Promise.all(files.map(parseSessionFile));
+  const parsedSessions = (await Promise.all(files.map(parseSessionFile))).filter(Boolean) as SessionSummary[];
+
+  // Sort sessions newest first
+  parsedSessions.sort((a, b) => b.createdAt - a.createdAt);
 
   const days: Record<string, DayStats> = {};
 
-  for (const fileDays of parsedResults) {
-    for (const [date, stats] of Object.entries(fileDays)) {
+  for (const session of parsedSessions) {
+    for (const [date, stats] of Object.entries(session.days)) {
       if (!days[date]) {
         days[date] = {
           totalTokens: 0,
@@ -178,7 +240,7 @@ export async function aggregateTokens(customSessionsRoot?: string): Promise<Heat
     }
   }
 
-  // Calculate Levels (GitHub 0..4 intensity scale based on positive token days)
+  // Calculate Levels (0..4 intensity scale based on positive token days)
   const positiveValues = Object.values(days)
     .map((d) => d.totalTokens)
     .filter((t) => t > 0)
@@ -187,13 +249,11 @@ export async function aggregateTokens(customSessionsRoot?: string): Promise<Heat
   let q1 = 5_000_000;
   let q2 = 25_000_000;
   let q3 = 75_000_000;
-  let q4 = 150_000_000;
 
   if (positiveValues.length >= 4) {
     q1 = positiveValues[Math.floor(positiveValues.length * 0.25)];
     q2 = positiveValues[Math.floor(positiveValues.length * 0.50)];
     q3 = positiveValues[Math.floor(positiveValues.length * 0.75)];
-    q4 = positiveValues[Math.floor(positiveValues.length * 0.90)];
   }
 
   for (const day of Object.values(days)) {
@@ -238,7 +298,6 @@ export async function aggregateTokens(customSessionsRoot?: string): Promise<Heat
   cursor.setDate(cursor.getDate() - 1);
   const yesterdayKey = formatDate(cursor);
 
-  // If active today, start from today; else if active yesterday, start from yesterday
   let streakDate = (days[todayKey]?.totalTokens ?? 0) > 0 ? new Date(now) : (days[yesterdayKey]?.totalTokens ?? 0) > 0 ? new Date(cursor) : null;
 
   if (streakDate) {
@@ -280,7 +339,7 @@ export async function aggregateTokens(customSessionsRoot?: string): Promise<Heat
 
   const endDate = formatDate(now);
   const start = new Date(now);
-  start.setDate(start.getDate() - 364); // 52 weeks = 364 days
+  start.setDate(start.getDate() - 364);
   const startDate = formatDate(start);
 
   return {
@@ -297,6 +356,7 @@ export async function aggregateTokens(customSessionsRoot?: string): Promise<Heat
       dailyAverage,
     },
     days,
+    sessions: parsedSessions,
     startDate,
     endDate,
   };
