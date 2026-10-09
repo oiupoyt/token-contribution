@@ -66,7 +66,7 @@ export function apply(ctx: any) {
         const button = document.createElement("button");
         button.className = "dsh-heatmap-trigger-btn";
         button.type = "button";
-        button.innerHTML = "<span>📊 View 12-Month Activity Heatmap →</span>";
+        button.innerHTML = "<span>View 12-Month Activity Heatmap →</span>";
         button.style.cssText = `
           display: flex;
           align-items: center;
