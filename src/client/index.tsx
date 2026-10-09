@@ -85,18 +85,18 @@ export function apply(ctx: any) {
         font-size: 12px;
         font-weight: 600;
         cursor: pointer;
-        box-shadow: 0 0 14px rgba(51, 109, 250, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
         transition: all 0.15s ease;
       `;
       button.onmouseenter = () => {
         button.style.background = "rgba(51, 109, 250, 0.22)";
         button.style.borderColor = "#336dfa";
-        button.style.boxShadow = "0 0 20px rgba(79, 133, 255, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.15)";
+        button.style.boxShadow = "0 2px 8px rgba(51, 109, 250, 0.25)";
       };
       button.onmouseleave = () => {
         button.style.background = "rgba(51, 109, 250, 0.12)";
         button.style.borderColor = "rgba(51, 109, 250, 0.35)";
-        button.style.boxShadow = "0 0 14px rgba(51, 109, 250, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08)";
+        button.style.boxShadow = "0 1px 4px rgba(0, 0, 0, 0.15)";
       };
       button.onclick = (e) => {
         e.preventDefault();

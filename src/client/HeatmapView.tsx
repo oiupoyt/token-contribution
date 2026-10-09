@@ -66,13 +66,13 @@ const DEEPSEEK_LEVELS = [
   "#4f85ff", // Level 4: Bright electric DeepSeek blue
 ];
 
-// Luminous glow & depth shading for tiles
+// Subdued, clean depth for tiles
 const TILE_SHADOWS = [
-  "inset 0 1px 2px rgba(0, 0, 0, 0.7)",
-  "0 0 4px rgba(21, 44, 111, 0.5)",
-  "0 0 7px rgba(31, 76, 219, 0.65), inset 0 0 2px rgba(255, 255, 255, 0.2)",
-  "0 0 10px rgba(51, 109, 250, 0.8), inset 0 0 3px rgba(255, 255, 255, 0.35)",
-  "0 0 14px rgba(79, 133, 255, 0.95), 0 0 3px #ffffff, inset 0 0 4px #ffffff",
+  "none",
+  "0 0 2px rgba(21, 44, 111, 0.25)",
+  "0 0 3px rgba(31, 76, 219, 0.35)",
+  "0 0 4px rgba(51, 109, 250, 0.45)",
+  "0 0 6px rgba(79, 133, 255, 0.55)",
 ];
 
 export function HeatmapView() {
@@ -412,17 +412,17 @@ export function HeatmapView() {
         {/* Card 1: Total Tokens */}
         <div
           style={{
-            background: "radial-gradient(ellipse at 50% 0%, rgba(51, 109, 250, 0.08) 0%, var(--dsw-alias-bg-layer-2, #2c2c2c) 100%)",
+            background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
             border: "1px solid var(--dsw-alias-border-l2, #494949)",
             borderRadius: 10,
             padding: "14px 16px",
-            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
           }}
         >
           <div style={{ fontSize: 11, color: "var(--dsw-alias-label-tertiary, #a0a0a0)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
             Total Tokens
           </div>
-          <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0 2px", color: "#4f85ff", textShadow: "0 0 16px rgba(79, 133, 255, 0.65), 0 0 4px rgba(79, 133, 255, 0.4)" }}>
+          <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0 2px", color: "#4f85ff" }}>
             {formatNumber(summary.totalTokens)}
           </div>
           <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
@@ -433,17 +433,17 @@ export function HeatmapView() {
         {/* Card 2: Cache Hit */}
         <div
           style={{
-            background: "radial-gradient(ellipse at 50% 0%, rgba(56, 189, 248, 0.08) 0%, var(--dsw-alias-bg-layer-2, #2c2c2c) 100%)",
+            background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
             border: "1px solid var(--dsw-alias-border-l2, #494949)",
             borderRadius: 10,
             padding: "14px 16px",
-            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
           }}
         >
           <div style={{ fontSize: 11, color: "var(--dsw-alias-label-tertiary, #a0a0a0)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
             Cache Hit Ratio
           </div>
-          <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0 2px", color: "#38bdf8", textShadow: "0 0 14px rgba(56, 189, 248, 0.55)" }}>
+          <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0 2px", color: "#38bdf8" }}>
             {cacheHitPercent}%
           </div>
           <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
@@ -454,17 +454,17 @@ export function HeatmapView() {
         {/* Card 3: Daily Average / Turns */}
         <div
           style={{
-            background: "radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.03) 0%, var(--dsw-alias-bg-layer-2, #2c2c2c) 100%)",
+            background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
             border: "1px solid var(--dsw-alias-border-l2, #494949)",
             borderRadius: 10,
             padding: "14px 16px",
-            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
           }}
         >
           <div style={{ fontSize: 11, color: "var(--dsw-alias-label-tertiary, #a0a0a0)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
             {selectedSessionId === "all" ? "Daily Average" : "Total Steps"}
           </div>
-          <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0 2px", color: "var(--dsw-alias-label-primary, #ffffff)", textShadow: "0 0 12px rgba(255, 255, 255, 0.2)" }}>
+          <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0 2px", color: "var(--dsw-alias-label-primary, #ffffff)" }}>
             {selectedSessionId === "all" ? formatNumber(summary.dailyAverage) : summary.totalTurns}
           </div>
           <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
@@ -475,17 +475,17 @@ export function HeatmapView() {
         {/* Card 4: Streak / Activity */}
         <div
           style={{
-            background: "radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.03) 0%, var(--dsw-alias-bg-layer-2, #2c2c2c) 100%)",
+            background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
             border: "1px solid var(--dsw-alias-border-l2, #494949)",
             borderRadius: 10,
             padding: "14px 16px",
-            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
           }}
         >
           <div style={{ fontSize: 11, color: "var(--dsw-alias-label-tertiary, #a0a0a0)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
             {selectedSessionId === "all" ? "Active Streak" : "Active Days"}
           </div>
-          <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0 2px", color: "var(--dsw-alias-label-primary, #ffffff)", textShadow: "0 0 12px rgba(255, 255, 255, 0.2)" }}>
+          <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0 2px", color: "var(--dsw-alias-label-primary, #ffffff)" }}>
             {selectedSessionId === "all" ? `${summary.currentStreak} days` : `${summary.activeDays} days`}
           </div>
           <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
@@ -497,13 +497,13 @@ export function HeatmapView() {
       {/* Heatmap Card */}
       <div
         style={{
-          background: "radial-gradient(ellipse 90% 50% at 50% 0%, rgba(51, 109, 250, 0.09) 0%, var(--dsw-alias-bg-layer-2, #2c2c2c) 85%)",
+          background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
           border: "1px solid var(--dsw-alias-border-l2, #494949)",
           borderRadius: 12,
           padding: "20px 22px",
           position: "relative",
           overflowX: "auto",
-          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06)",
+          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.2)",
         }}
       >
         <div
