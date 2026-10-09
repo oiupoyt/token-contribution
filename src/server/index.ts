@@ -1,5 +1,3 @@
-import { aggregateTokens } from "./aggregator.js";
-
 export const name = "dsh-plugin-token-heatmap";
 export const inject = ["webServer"];
 
@@ -12,7 +10,6 @@ export function apply(ctx: any) {
         const url = new URL(req.url, "http://localhost");
         const pathname = url.pathname.replace(/\/+$/, "");
 
-        // Set common headers
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
         res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -25,6 +22,7 @@ export function apply(ctx: any) {
 
         if (req.method === "GET" && (pathname === "/api/dsh-token-heatmap" || pathname === "/api/dsh-token-heatmap/stats")) {
           try {
+            const { aggregateTokens } = await import(`./aggregator.js?t=${Date.now()}`);
             const data = await aggregateTokens();
             res.writeHead(200, {
               "Content-Type": "application/json; charset=utf-8",
