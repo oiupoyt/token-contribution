@@ -78,22 +78,22 @@ export function apply(ctx: any) {
         width: 100%;
         margin-top: 12px;
         padding: 8px 12px;
-        background: rgba(57, 100, 254, 0.12);
-        border: 1px solid rgba(57, 100, 254, 0.35);
+        background: rgba(51, 109, 250, 0.12);
+        border: 1px solid rgba(51, 109, 250, 0.35);
         border-radius: 8px;
-        color: #5686fe;
+        color: #4f85ff;
         font-size: 12px;
         font-weight: 600;
         cursor: pointer;
         transition: background 0.15s ease, border-color 0.15s ease;
       `;
       button.onmouseenter = () => {
-        button.style.background = "rgba(57, 100, 254, 0.22)";
-        button.style.borderColor = "#3964fe";
+        button.style.background = "rgba(51, 109, 250, 0.22)";
+        button.style.borderColor = "#336dfa";
       };
       button.onmouseleave = () => {
-        button.style.background = "rgba(57, 100, 254, 0.12)";
-        button.style.borderColor = "rgba(57, 100, 254, 0.35)";
+        button.style.background = "rgba(51, 109, 250, 0.12)";
+        button.style.borderColor = "rgba(51, 109, 250, 0.35)";
       };
       button.onclick = (e) => {
         e.preventDefault();

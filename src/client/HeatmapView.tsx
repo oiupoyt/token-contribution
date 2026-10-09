@@ -57,13 +57,13 @@ function formatExact(num: number): string {
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""];
 
-// DeepSeek Official Blue Gradient (anchored on DeepSeek logo #3964FE and highlight #5686FE)
+// Simple monochromatic gradient: Black -> Vibrant DeepSeek Blue
 const DEEPSEEK_LEVELS = [
-  "rgba(57, 100, 254, 0.06)",
-  "#1c2d68",
-  "#2849b8",
-  "#3964fe",
-  "#5686fe",
+  "#0f1117", // Level 0: Black / dark void tile
+  "#152c6f", // Level 1: Dark deep blue
+  "#1f4cdb", // Level 2: Medium vibrant blue
+  "#336dfa", // Level 3: Vibrant DeepSeek brand blue
+  "#4f85ff", // Level 4: Bright electric DeepSeek blue
 ];
 
 export function HeatmapView() {
@@ -321,9 +321,9 @@ export function HeatmapView() {
                 fontWeight: 600,
                 padding: "2px 8px",
                 borderRadius: 12,
-                background: "rgba(57, 100, 254, 0.12)",
-                color: "#5686fe",
-                border: "1px solid rgba(57, 100, 254, 0.3)",
+                background: "rgba(51, 109, 250, 0.12)",
+                color: "#4f85ff",
+                border: "1px solid rgba(51, 109, 250, 0.35)",
               }}
             >
               52 Weeks
@@ -412,7 +412,7 @@ export function HeatmapView() {
           <div style={{ fontSize: 11, color: "var(--dsw-alias-label-tertiary, #a0a0a0)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
             Total Tokens
           </div>
-          <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0 2px", color: "#5686fe" }}>
+          <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0 2px", color: "#4f85ff" }}>
             {formatNumber(summary.totalTokens)}
           </div>
           <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
@@ -660,7 +660,7 @@ export function HeatmapView() {
             <div style={{ color: "var(--dsw-alias-label-tertiary)" }}>No activity recorded</div>
           ) : (
             <div>
-              <div style={{ color: "#5686fe", fontWeight: 600 }}>
+              <div style={{ color: "#4f85ff", fontWeight: 600 }}>
                 {formatExact(hoveredDay.stats.totalTokens)} tokens
               </div>
               <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary)", marginTop: 2 }}>
