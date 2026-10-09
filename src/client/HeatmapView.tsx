@@ -66,13 +66,13 @@ const DEEPSEEK_LEVELS = [
   "#4f85ff", // Level 4: Bright electric DeepSeek blue
 ];
 
-// Subdued, clean depth for tiles
+// Glow effect strictly for the bright blue contribution tiles
 const TILE_SHADOWS = [
-  "none",
-  "0 0 2px rgba(21, 44, 111, 0.25)",
-  "0 0 3px rgba(31, 76, 219, 0.35)",
-  "0 0 4px rgba(51, 109, 250, 0.45)",
-  "0 0 6px rgba(79, 133, 255, 0.55)",
+  "none",                                                              // Level 0: Black / flat
+  "none",                                                              // Level 1: Dark deep blue / flat
+  "none",                                                              // Level 2: Mid blue / flat
+  "0 0 4px rgba(51, 109, 250, 0.4)",                                  // Level 3: Faint brand blue edge
+  "0 0 10px rgba(79, 133, 255, 0.85), 0 0 2px rgba(255, 255, 255, 0.5)", // Level 4: Bright electric blue glow
 ];
 
 export function HeatmapView() {
@@ -578,6 +578,10 @@ export function HeatmapView() {
                       }
                       const lvl = day.stats.level || 0;
                       const bg = DEEPSEEK_LEVELS[lvl];
+                      const isHovered = hoveredDay?.date === day.date;
+                      const currentShadow = isHovered
+                        ? (lvl >= 3 ? "0 0 12px rgba(79, 133, 255, 0.95), 0 0 2px #ffffff" : "0 0 4px rgba(51, 109, 250, 0.4)")
+                        : TILE_SHADOWS[lvl];
 
                       return (
                         <div
@@ -596,12 +600,14 @@ export function HeatmapView() {
                             height: 11,
                             borderRadius: 2,
                             backgroundColor: bg,
-                            boxShadow: TILE_SHADOWS[lvl],
+                            boxShadow: currentShadow,
                             border:
                               lvl === 0
                                 ? "1px solid rgba(255, 255, 255, 0.05)"
                                 : "1px solid transparent",
                             cursor: "pointer",
+                            transform: isHovered ? "scale(1.15)" : "scale(1)",
+                            zIndex: isHovered ? 5 : 1,
                             transition: "all 0.12s ease",
                             position: "relative",
                           }}
