@@ -33,8 +33,8 @@ export function HeatmapModal({ open, onClose }: HeatmapModalProps) {
         style={{
           position: "relative",
           width: "100%",
-          maxWidth: "960px",
-          maxHeight: "90vh",
+          maxWidth: "1040px",
+          maxHeight: "92vh",
           overflowY: "auto",
           background: "var(--dsw-alias-bg-layer-1, #1e1e1e)",
           border: "1px solid var(--dsw-alias-border-l2, #494949)",

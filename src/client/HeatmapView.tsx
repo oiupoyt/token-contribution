@@ -86,6 +86,7 @@ export function HeatmapView() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [hoveredDay, setHoveredDay] = useState<{ date: string; stats: DayStats } | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
   const fetchStats = () => {
     setLoading(true);
@@ -107,6 +108,12 @@ export function HeatmapView() {
   useEffect(() => {
     fetchStats();
   }, []);
+
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth;
+    }
+  }, [calendarGrid]);
 
   // Compute active days & stats based on session filter
   const activeView = useMemo(() => {
@@ -530,14 +537,23 @@ export function HeatmapView() {
           )}
         </div>
 
-        {/* Responsive GitHub-Style Calendar SVG (scales with container width) */}
+        {/* Comfortably sized GitHub-Style Calendar SVG with smooth horizontal scroll */}
         {calendarGrid && (
-          <div style={{ width: "100%", overflow: "hidden" }}>
+          <div
+            ref={scrollContainerRef}
+            style={{
+              width: "100%",
+              overflowX: "auto",
+              WebkitOverflowScrolling: "touch",
+              paddingBottom: "8px",
+            }}
+          >
             <svg
-              viewBox="0 0 740 112"
+              viewBox="0 0 895 142"
               style={{
                 width: "100%",
-                height: "auto",
+                minWidth: "860px",
+                height: "142px",
                 display: "block",
                 overflow: "visible",
               }}
@@ -546,9 +562,9 @@ export function HeatmapView() {
               {monthHeaders.map((m, i) => (
                 <text
                   key={i}
-                  x={30 + m.col * 13.2}
-                  y={10}
-                  fontSize={10}
+                  x={34 + m.col * 16}
+                  y={12}
+                  fontSize={11}
                   fill="var(--dsw-alias-label-tertiary, #888888)"
                   fontFamily="inherit"
                 >
@@ -557,19 +573,19 @@ export function HeatmapView() {
               ))}
 
               {/* Day of week labels */}
-              <text x={2} y={38} fontSize={9} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
+              <text x={4} y={49} fontSize={10} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
                 Mon
               </text>
-              <text x={2} y={64} fontSize={9} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
+              <text x={4} y={81} fontSize={10} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
                 Wed
               </text>
-              <text x={2} y={90} fontSize={9} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
+              <text x={4} y={113} fontSize={10} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
                 Fri
               </text>
 
-              {/* Day Tiles */}
+              {/* Day Tiles: comfortable 12.5px size with 16px step */}
               {calendarGrid.map((week, colIdx) => (
-                <g key={colIdx} transform={`translate(${28 + colIdx * 13.2}, 16)`}>
+                <g key={colIdx} transform={`translate(${34 + colIdx * 16}, 22)`}>
                   {week.map((day, rowIdx) => {
                     if (!day) return null;
 
@@ -584,20 +600,20 @@ export function HeatmapView() {
                       : isHovered
                       ? "#5686fe"
                       : lvl === 0
-                      ? "rgba(255, 255, 255, 0.05)"
+                      ? "rgba(255, 255, 255, 0.06)"
                       : "transparent";
 
-                    const strokeWidth = isSelected ? 1.5 : isHovered ? 1.2 : 1;
+                    const strokeWidth = isSelected ? 1.8 : isHovered ? 1.4 : 1;
 
                     return (
                       <rect
                         key={rowIdx}
                         x={0}
-                        y={rowIdx * 13}
-                        width={10.5}
-                        height={10.5}
-                        rx={2}
-                        ry={2}
+                        y={rowIdx * 16}
+                        width={12.5}
+                        height={12.5}
+                        rx={2.5}
+                        ry={2.5}
                         fill={bg}
                         stroke={strokeColor}
                         strokeWidth={strokeWidth}
@@ -609,7 +625,7 @@ export function HeatmapView() {
                             : isHovered
                             ? "drop-shadow(0 0 4px rgba(86, 134, 254, 0.7))"
                             : lvl === 4
-                            ? "drop-shadow(0 0 3px rgba(79, 133, 255, 0.5))"
+                            ? "drop-shadow(0 0 4px rgba(79, 133, 255, 0.6))"
                             : "none",
                         }}
                         onClick={() => {
@@ -652,11 +668,11 @@ export function HeatmapView() {
                   <div
                     key={i}
                     style={{
-                      width: 10.5,
-                      height: 10.5,
-                      borderRadius: 2,
+                      width: 12.5,
+                      height: 12.5,
+                      borderRadius: 2.5,
                       backgroundColor: c,
-                      border: i === 0 ? "1px solid rgba(255, 255, 255, 0.05)" : "none",
+                      border: i === 0 ? "1px solid rgba(255, 255, 255, 0.06)" : "none",
                       filter: i === 4 ? "drop-shadow(0 0 3px rgba(79, 133, 255, 0.5))" : "none",
                     }}
                   />
