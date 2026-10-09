@@ -1,0 +1,4 @@
+# dsh-plugin-token-heatmap bundle patch
+- insert:
+    - id: token-heatmap
+      name: 'dsh-plugin-token-heatmap'
