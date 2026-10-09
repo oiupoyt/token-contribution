@@ -3,6 +3,17 @@ import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
 
+export interface DaySessionDetail {
+  sessionId: string;
+  sessionTitle: string;
+  createdAt: number;
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  turns: number;
+}
+
 export interface DayStats {
   totalTokens: number;
   inputTokens: number;
@@ -11,6 +22,7 @@ export interface DayStats {
   cacheWriteTokens: number;
   turns: number;
   level?: number; // 0..4
+  sessions?: DaySessionDetail[];
 }
 
 export interface SessionSummary {
@@ -229,6 +241,7 @@ export async function aggregateTokens(customSessionsRoot?: string): Promise<Heat
           cacheReadTokens: 0,
           cacheWriteTokens: 0,
           turns: 0,
+          sessions: [],
         };
       }
       days[date].totalTokens += stats.totalTokens;
@@ -237,6 +250,24 @@ export async function aggregateTokens(customSessionsRoot?: string): Promise<Heat
       days[date].cacheReadTokens += stats.cacheReadTokens;
       days[date].cacheWriteTokens += stats.cacheWriteTokens;
       days[date].turns += stats.turns;
+
+      days[date].sessions!.push({
+        sessionId: session.id,
+        sessionTitle: session.title,
+        createdAt: session.createdAt,
+        totalTokens: stats.totalTokens,
+        inputTokens: stats.inputTokens,
+        outputTokens: stats.outputTokens,
+        cacheReadTokens: stats.cacheReadTokens,
+        turns: stats.turns,
+      });
+    }
+  }
+
+  // Sort sessions within each day by totalTokens descending
+  for (const day of Object.values(days)) {
+    if (day.sessions) {
+      day.sessions.sort((a, b) => b.totalTokens - a.totalTokens);
     }
   }
 

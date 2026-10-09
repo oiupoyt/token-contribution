@@ -1,5 +1,16 @@
 import React, { useEffect, useState, useMemo } from "react";
 
+export interface DaySessionDetail {
+  sessionId: string;
+  sessionTitle: string;
+  createdAt: number;
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  turns: number;
+}
+
 export interface DayStats {
   totalTokens: number;
   inputTokens: number;
@@ -8,6 +19,7 @@ export interface DayStats {
   cacheWriteTokens: number;
   turns: number;
   level?: number;
+  sessions?: DaySessionDetail[];
 }
 
 export interface SessionSummary {
@@ -55,7 +67,7 @@ function formatExact(num: number): string {
 }
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const DAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""];
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // Simple monochromatic gradient: Black -> Vibrant DeepSeek Blue
 const DEEPSEEK_LEVELS = [
@@ -66,20 +78,12 @@ const DEEPSEEK_LEVELS = [
   "#4f85ff", // Level 4: Bright electric DeepSeek blue
 ];
 
-// Glow effect strictly for the bright blue contribution tiles
-const TILE_SHADOWS = [
-  "none",                                                              // Level 0: Black / flat
-  "none",                                                              // Level 1: Dark deep blue / flat
-  "none",                                                              // Level 2: Mid blue / flat
-  "0 0 4px rgba(51, 109, 250, 0.4)",                                  // Level 3: Faint brand blue edge
-  "0 0 10px rgba(79, 133, 255, 0.85), 0 0 2px rgba(255, 255, 255, 0.5)", // Level 4: Bright electric blue glow
-];
-
 export function HeatmapView() {
   const [data, setData] = useState<HeatmapResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("all");
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [hoveredDay, setHoveredDay] = useState<{ date: string; stats: DayStats } | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -125,7 +129,6 @@ export function HeatmapView() {
       };
     }
 
-    // Recalculate summary for this specific session
     let totalTokens = session.totalTokens;
     let totalInputTokens = session.inputTokens;
     let totalOutputTokens = session.outputTokens;
@@ -141,7 +144,6 @@ export function HeatmapView() {
       }
     }
 
-    // Re-level for this session
     const positiveValues = Object.values(session.days)
       .map((d) => d.totalTokens)
       .filter((t) => t > 0)
@@ -288,6 +290,8 @@ export function HeatmapView() {
       ? Math.round((summary.totalCacheReadTokens / summary.totalTokens) * 100)
       : 0;
 
+  const inspectedDayStats = selectedDate ? activeView.days[selectedDate] : null;
+
   return (
     <div
       style={{
@@ -356,7 +360,10 @@ export function HeatmapView() {
             <span style={{ fontSize: 12, color: "var(--dsw-alias-label-tertiary)" }}>Session:</span>
             <select
               value={selectedSessionId}
-              onChange={(e) => setSelectedSessionId(e.target.value)}
+              onChange={(e) => {
+                setSelectedSessionId(e.target.value);
+                setSelectedDate(null);
+              }}
               style={{
                 background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
                 border: "1px solid var(--dsw-alias-border-l2, #494949)",
@@ -494,7 +501,7 @@ export function HeatmapView() {
         </div>
       </div>
 
-      {/* Heatmap Card */}
+      {/* Heatmap Card (Auto-resizes responsive SVG panel, GitHub style) */}
       <div
         style={{
           background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
@@ -502,7 +509,6 @@ export function HeatmapView() {
           borderRadius: 12,
           padding: "20px 22px",
           position: "relative",
-          overflowX: "auto",
           boxShadow: "0 4px 16px rgba(0, 0, 0, 0.2)",
         }}
       >
@@ -524,135 +530,285 @@ export function HeatmapView() {
           )}
         </div>
 
-        {/* SVG Heatmap */}
+        {/* Responsive GitHub-Style Calendar SVG (scales with container width) */}
         {calendarGrid && (
-          <div style={{ display: "inline-block", minWidth: 780 }}>
-            {/* Month labels */}
-            <div style={{ display: "flex", marginLeft: 32, marginBottom: 4, height: 16 }}>
+          <div style={{ width: "100%", overflow: "hidden" }}>
+            <svg
+              viewBox="0 0 740 112"
+              style={{
+                width: "100%",
+                height: "auto",
+                display: "block",
+                overflow: "visible",
+              }}
+            >
+              {/* Month labels */}
               {monthHeaders.map((m, i) => (
-                <div
+                <text
                   key={i}
-                  style={{
-                    position: "relative",
-                    left: m.col * 14,
-                    width: 0,
-                    whiteSpace: "nowrap",
-                    fontSize: 10,
-                    color: "var(--dsw-alias-label-tertiary, #a0a0a0)",
-                  }}
+                  x={30 + m.col * 13.2}
+                  y={10}
+                  fontSize={10}
+                  fill="var(--dsw-alias-label-tertiary, #888888)"
+                  fontFamily="inherit"
                 >
                   {m.label}
-                </div>
+                </text>
               ))}
-            </div>
 
-            {/* Grid with day labels */}
-            <div style={{ display: "flex", gap: 6 }}>
               {/* Day of week labels */}
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 3,
-                  width: 26,
-                  fontSize: 9,
-                  color: "var(--dsw-alias-label-tertiary, #a0a0a0)",
-                  textAlign: "right",
-                  paddingTop: 1,
-                }}
-              >
-                {DAY_LABELS.map((lbl, idx) => (
-                  <div key={idx} style={{ height: 11, lineHeight: "11px" }}>
-                    {lbl}
-                  </div>
-                ))}
-              </div>
+              <text x={2} y={38} fontSize={9} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
+                Mon
+              </text>
+              <text x={2} y={64} fontSize={9} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
+                Wed
+              </text>
+              <text x={2} y={90} fontSize={9} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
+                Fri
+              </text>
 
-              {/* Columns of weeks */}
-              <div style={{ display: "flex", gap: 3 }}>
-                {calendarGrid.map((week, colIdx) => (
-                  <div key={colIdx} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                    {week.map((day, rowIdx) => {
-                      if (!day) {
-                        return <div key={rowIdx} style={{ width: 11, height: 11 }} />;
-                      }
-                      const lvl = day.stats.level || 0;
-                      const bg = DEEPSEEK_LEVELS[lvl];
-                      const isHovered = hoveredDay?.date === day.date;
-                      const currentShadow = isHovered
-                        ? (lvl >= 3 ? "0 0 12px rgba(79, 133, 255, 0.95), 0 0 2px #ffffff" : "0 0 4px rgba(51, 109, 250, 0.4)")
-                        : TILE_SHADOWS[lvl];
+              {/* Day Tiles */}
+              {calendarGrid.map((week, colIdx) => (
+                <g key={colIdx} transform={`translate(${28 + colIdx * 13.2}, 16)`}>
+                  {week.map((day, rowIdx) => {
+                    if (!day) return null;
 
-                      return (
-                        <div
-                          key={rowIdx}
-                          onMouseEnter={(e) => {
-                            setHoveredDay({ date: day.date, stats: day.stats });
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
-                          }}
-                          onMouseLeave={() => {
-                            setHoveredDay(null);
-                            setTooltipPos(null);
-                          }}
-                          style={{
-                            width: 11,
-                            height: 11,
-                            borderRadius: 2,
-                            backgroundColor: bg,
-                            boxShadow: currentShadow,
-                            border:
-                              lvl === 0
-                                ? "1px solid rgba(255, 255, 255, 0.05)"
-                                : "1px solid transparent",
-                            cursor: "pointer",
-                            transform: isHovered ? "scale(1.15)" : "scale(1)",
-                            zIndex: isHovered ? 5 : 1,
-                            transition: "all 0.12s ease",
-                            position: "relative",
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
+                    const lvl = day.stats.level || 0;
+                    const bg = DEEPSEEK_LEVELS[lvl];
+                    const isSelected = selectedDate === day.date;
+                    const isHovered = hoveredDay?.date === day.date;
 
-            {/* Legend & Footnote */}
+                    // GitHub-style glow & outline
+                    const strokeColor = isSelected
+                      ? "#ffffff"
+                      : isHovered
+                      ? "#5686fe"
+                      : lvl === 0
+                      ? "rgba(255, 255, 255, 0.05)"
+                      : "transparent";
+
+                    const strokeWidth = isSelected ? 1.5 : isHovered ? 1.2 : 1;
+
+                    return (
+                      <rect
+                        key={rowIdx}
+                        x={0}
+                        y={rowIdx * 13}
+                        width={10.5}
+                        height={10.5}
+                        rx={2}
+                        ry={2}
+                        fill={bg}
+                        stroke={strokeColor}
+                        strokeWidth={strokeWidth}
+                        style={{
+                          cursor: "pointer",
+                          transition: "fill 0.12s ease, stroke 0.12s ease",
+                          filter: isSelected
+                            ? "drop-shadow(0 0 6px rgba(86, 134, 254, 0.9))"
+                            : isHovered
+                            ? "drop-shadow(0 0 4px rgba(86, 134, 254, 0.7))"
+                            : lvl === 4
+                            ? "drop-shadow(0 0 3px rgba(79, 133, 255, 0.5))"
+                            : "none",
+                        }}
+                        onClick={() => {
+                          setSelectedDate(isSelected ? null : day.date);
+                        }}
+                        onMouseEnter={(e) => {
+                          setHoveredDay({ date: day.date, stats: day.stats });
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredDay(null);
+                          setTooltipPos(null);
+                        }}
+                      />
+                    );
+                  })}
+                </g>
+              ))}
+            </svg>
+
+            {/* Bottom Legend */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "flex-end",
-                gap: 6,
+                justifyContent: "space-between",
                 marginTop: 14,
                 fontSize: 11,
                 color: "var(--dsw-alias-label-tertiary, #a0a0a0)",
               }}
             >
-              <span>Less</span>
-              {DEEPSEEK_LEVELS.map((c, i) => (
-                <div
-                  key={i}
-                  style={{
-                    width: 11,
-                    height: 11,
-                    borderRadius: 2,
-                    backgroundColor: c,
-                    boxShadow: TILE_SHADOWS[i],
-                    border: i === 0 ? "1px solid rgba(255, 255, 255, 0.05)" : "none",
-                  }}
-                />
-              ))}
-              <span>More</span>
+              <span style={{ fontSize: 11 }}>
+                Tip: Click any day to inspect sessions and token breakdown
+              </span>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span>Less</span>
+                {DEEPSEEK_LEVELS.map((c, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      width: 10.5,
+                      height: 10.5,
+                      borderRadius: 2,
+                      backgroundColor: c,
+                      border: i === 0 ? "1px solid rgba(255, 255, 255, 0.05)" : "none",
+                      filter: i === 4 ? "drop-shadow(0 0 3px rgba(79, 133, 255, 0.5))" : "none",
+                    }}
+                  />
+                ))}
+                <span>More</span>
+              </div>
             </div>
           </div>
         )}
       </div>
 
+      {/* Day Inspection Detail Drawer (Opens when any day is clicked) */}
+      {selectedDate && (
+        <div
+          style={{
+            marginTop: 18,
+            background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
+            border: "1px solid var(--dsw-alias-border-l2, #494949)",
+            borderRadius: 12,
+            padding: "18px 20px",
+            boxShadow: "0 6px 20px rgba(0, 0, 0, 0.25)",
+            animation: "fadeIn 0.15s ease",
+          }}
+        >
+          {/* Header of the Day Detail */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              borderBottom: "1px solid var(--dsw-alias-border-l1, #3a3a3a)",
+              paddingBottom: 12,
+              marginBottom: 14,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "var(--dsw-alias-label-primary, #ffffff)" }}>
+                {new Date(selectedDate + "T00:00:00").toLocaleDateString(undefined, {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--dsw-alias-label-secondary, #b9b9b9)", marginTop: 2 }}>
+                {inspectedDayStats && inspectedDayStats.totalTokens > 0 ? (
+                  <span>
+                    <strong style={{ color: "#4f85ff" }}>{formatExact(inspectedDayStats.totalTokens)}</strong> total tokens across{" "}
+                    <strong>{inspectedDayStats.turns}</strong> turns
+                  </span>
+                ) : (
+                  "No activity recorded"
+                )}
+              </div>
+            </div>
+
+            <button
+              onClick={() => setSelectedDate(null)}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "var(--dsw-alias-label-tertiary)",
+                cursor: "pointer",
+                fontSize: 16,
+                padding: "4px 8px",
+                borderRadius: 4,
+              }}
+              title="Close day view"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Breakdown Pills for the day */}
+          {inspectedDayStats && inspectedDayStats.totalTokens > 0 && (
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                flexWrap: "wrap",
+                marginBottom: 16,
+                fontSize: 12,
+              }}
+            >
+              <div style={{ padding: "6px 12px", background: "var(--dsw-alias-bg-layer-1, #1e1e1e)", borderRadius: 6, border: "1px solid var(--dsw-alias-border-l1)" }}>
+                <span style={{ color: "var(--dsw-alias-label-tertiary)" }}>Billed Input: </span>
+                <strong>{formatNumber(inspectedDayStats.inputTokens)}</strong>
+              </div>
+              <div style={{ padding: "6px 12px", background: "var(--dsw-alias-bg-layer-1, #1e1e1e)", borderRadius: 6, border: "1px solid var(--dsw-alias-border-l1)" }}>
+                <span style={{ color: "var(--dsw-alias-label-tertiary)" }}>Output Generated: </span>
+                <strong>{formatNumber(inspectedDayStats.outputTokens)}</strong>
+              </div>
+              <div style={{ padding: "6px 12px", background: "var(--dsw-alias-bg-layer-1, #1e1e1e)", borderRadius: 6, border: "1px solid var(--dsw-alias-border-l1)" }}>
+                <span style={{ color: "var(--dsw-alias-label-tertiary)" }}>Cache Reads: </span>
+                <strong style={{ color: "#38bdf8" }}>{formatNumber(inspectedDayStats.cacheReadTokens)}</strong> (
+                {Math.round((inspectedDayStats.cacheReadTokens / inspectedDayStats.totalTokens) * 100)}%)
+              </div>
+            </div>
+          )}
+
+          {/* Sessions List for that Day */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--dsw-alias-label-primary)", marginBottom: 10 }}>
+              Sessions Active on this Day ({inspectedDayStats?.sessions?.length || 0})
+            </div>
+
+            {inspectedDayStats?.sessions && inspectedDayStats.sessions.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto" }}>
+                {inspectedDayStats.sessions.map((sess, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 14px",
+                      background: "var(--dsw-alias-bg-layer-1, #1e1e1e)",
+                      border: "1px solid var(--dsw-alias-border-l1, #3a3a3a)",
+                      borderRadius: 8,
+                    }}
+                  >
+                    <div style={{ minWidth: 0, flex: 1, paddingRight: 16 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: "var(--dsw-alias-label-primary, #ffffff)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {sess.sessionTitle}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--dsw-alias-label-tertiary, #a0a0a0)", marginTop: 2 }}>
+                        Started {new Date(sess.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ID: {sess.sessionId.slice(0, 10)}
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: "#4f85ff" }}>
+                        {formatNumber(sess.totalTokens)} tokens
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary)", marginTop: 2 }}>
+                        {sess.turns} turns · {formatNumber(sess.inputTokens + sess.outputTokens)} billed
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: "16px", textAlign: "center", color: "var(--dsw-alias-label-tertiary)", fontSize: 12, background: "var(--dsw-alias-bg-layer-1)", borderRadius: 8 }}>
+                No session records found for this date.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Floating Hover Tooltip */}
-      {hoveredDay && tooltipPos && (
+      {hoveredDay && tooltipPos && !selectedDate && (
         <div
           style={{
             position: "fixed",
@@ -690,7 +846,7 @@ export function HeatmapView() {
                 {hoveredDay.stats.turns} requests / steps
               </div>
               <div style={{ fontSize: 10, color: "var(--dsw-alias-label-tertiary)", marginTop: 4 }}>
-                Billed: {formatNumber(hoveredDay.stats.inputTokens + hoveredDay.stats.outputTokens)} · Cache: {formatNumber(hoveredDay.stats.cacheReadTokens)}
+                Click to inspect sessions on this day
               </div>
             </div>
           )}
