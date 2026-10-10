@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 
 export interface DaySessionDetail {
   sessionId: string;
@@ -78,7 +78,7 @@ const DEEPSEEK_LEVELS = [
   "#4f85ff", // Level 4: Bright electric DeepSeek blue
 ];
 
-export function HeatmapView() {
+function HeatmapInnerView() {
   const [data, setData] = useState<HeatmapResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,7 +86,7 @@ export function HeatmapView() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [hoveredDay, setHoveredDay] = useState<{ date: string; stats: DayStats } | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
-  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const fetchStats = () => {
     setLoading(true);
@@ -108,12 +108,6 @@ export function HeatmapView() {
   useEffect(() => {
     fetchStats();
   }, []);
-
-  useEffect(() => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth;
-    }
-  }, [calendarGrid]);
 
   // Compute active days & stats based on session filter
   const activeView = useMemo(() => {
@@ -257,6 +251,12 @@ export function HeatmapView() {
     });
 
     return headers;
+  }, [calendarGrid]);
+
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth;
+    }
   }, [calendarGrid]);
 
   if (loading && !data) {
@@ -871,5 +871,64 @@ export function HeatmapView() {
         </div>
       )}
     </div>
+  );
+}
+
+class HeatmapErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: any }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: any, info: any) {
+    console.error("Heatmap rendering error:", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: "30px 20px", color: "var(--dsw-alias-state-error-primary, #ef4444)" }}>
+          <h3 style={{ margin: "0 0 10px 0" }}>Token Heatmap Encountered an Error</h3>
+          <pre
+            style={{
+              fontSize: 12,
+              background: "rgba(0,0,0,0.3)",
+              padding: 12,
+              borderRadius: 8,
+              overflowX: "auto",
+            }}
+          >
+            {String(this.state.error?.message || this.state.error)}
+          </pre>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{
+              marginTop: 12,
+              padding: "6px 14px",
+              background: "var(--dsw-alias-brand-primary, #3964fe)",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              cursor: "pointer",
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export function HeatmapView() {
+  return (
+    <HeatmapErrorBoundary>
+      <HeatmapInnerView />
+    </HeatmapErrorBoundary>
   );
 }
