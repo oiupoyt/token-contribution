@@ -43,5 +43,13 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://git.oiupoyt.space/oiupoyt/dsh-plugin-token-heatmap.git"
+  },
+  "bugs": {
+    "url": "https://git.oiupoyt.space/oiupoyt/dsh-plugin-token-heatmap/issues"
+  },
+  "homepage": "https://git.oiupoyt.space/oiupoyt/dsh-plugin-token-heatmap#readme"
 }
