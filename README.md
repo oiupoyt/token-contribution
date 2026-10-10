@@ -1,7 +1,5 @@
 # dsh-plugin-token-heatmap
 
-> GitHub-style token usage contribution heatmap and analytics for [DeepSeek Harness](https://github.com/deepseek-ai/dsh).
-
 Visualizes your daily token consumption, prompt intensity, cache hit efficiency, and streaks across all sessions in a 52-week contribution calendar.
 
 ---
