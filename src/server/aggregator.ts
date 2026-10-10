@@ -25,6 +25,16 @@ export interface DayStats {
   sessions?: DaySessionDetail[];
 }
 
+export interface ModelUsage {
+  model: string;
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  turns: number;
+  percentage: number;
+}
+
 export interface SessionSummary {
   id: string;
   title: string;
@@ -35,6 +45,7 @@ export interface SessionSummary {
   cacheReadTokens: number;
   turns: number;
   days: Record<string, DayStats>;
+  models?: Record<string, { totalTokens: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; turns: number }>;
 }
 
 export interface SummaryStats {
@@ -54,6 +65,7 @@ export interface HeatmapResponse {
   summary: SummaryStats;
   days: Record<string, DayStats>;
   sessions: SessionSummary[];
+  models: ModelUsage[];
   startDate: string;
   endDate: string;
 }
@@ -93,6 +105,7 @@ async function parseSessionFile(filePath: string): Promise<SessionSummary | null
 
     const isZstd = filePath.endsWith(".zstd");
     const days: Record<string, DayStats> = {};
+    const sessionModels: Record<string, { totalTokens: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; turns: number }> = {};
     let sessionId = path.basename(path.dirname(filePath));
     let title = "";
     let createdAt = stat.birthtimeMs || stat.mtimeMs;
@@ -137,6 +150,7 @@ async function parseSessionFile(filePath: string): Promise<SessionSummary | null
               const cacheRead = Number(usage.cacheReadTokens) || 0;
               const cacheWrite = Number(usage.cacheWriteTokens) || 0;
               const total = input + output + cacheRead;
+              const model = obj.data?.message?.source?.model || obj.data?.model || obj.model || "gemini-3.8-flash-tiered";
 
               if (!days[dateKey]) {
                 days[dateKey] = {
@@ -154,6 +168,15 @@ async function parseSessionFile(filePath: string): Promise<SessionSummary | null
               days[dateKey].cacheReadTokens += cacheRead;
               days[dateKey].cacheWriteTokens += cacheWrite;
               days[dateKey].turns += 1;
+
+              if (!sessionModels[model]) {
+                sessionModels[model] = { totalTokens: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, turns: 0 };
+              }
+              sessionModels[model].totalTokens += total;
+              sessionModels[model].inputTokens += input;
+              sessionModels[model].outputTokens += output;
+              sessionModels[model].cacheReadTokens += cacheRead;
+              sessionModels[model].turns += 1;
 
               totalTokens += total;
               totalInputTokens += input;
@@ -212,6 +235,7 @@ async function parseSessionFile(filePath: string): Promise<SessionSummary | null
       cacheReadTokens: totalCacheReadTokens,
       turns: totalTurns,
       days,
+      models: sessionModels,
     };
 
     fileCache.set(filePath, { mtimeMs: stat.mtimeMs, session });
@@ -230,6 +254,7 @@ export async function aggregateTokens(customSessionsRoot?: string): Promise<Heat
   parsedSessions.sort((a, b) => b.createdAt - a.createdAt);
 
   const days: Record<string, DayStats> = {};
+  const allModelsMap: Record<string, { totalTokens: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; turns: number }> = {};
 
   for (const session of parsedSessions) {
     for (const [date, stats] of Object.entries(session.days)) {
@@ -261,6 +286,19 @@ export async function aggregateTokens(customSessionsRoot?: string): Promise<Heat
         cacheReadTokens: stats.cacheReadTokens,
         turns: stats.turns,
       });
+    }
+
+    if (session.models) {
+      for (const [modelName, mStats] of Object.entries(session.models)) {
+        if (!allModelsMap[modelName]) {
+          allModelsMap[modelName] = { totalTokens: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, turns: 0 };
+        }
+        allModelsMap[modelName].totalTokens += mStats.totalTokens;
+        allModelsMap[modelName].inputTokens += mStats.inputTokens;
+        allModelsMap[modelName].outputTokens += mStats.outputTokens;
+        allModelsMap[modelName].cacheReadTokens += mStats.cacheReadTokens;
+        allModelsMap[modelName].turns += mStats.turns;
+      }
     }
   }
 
@@ -314,6 +352,19 @@ export async function aggregateTokens(customSessionsRoot?: string): Promise<Heat
       peakDay = { date, tokens: stats.totalTokens, turns: stats.turns };
     }
   }
+
+  // Build sorted model breakdown array
+  const models: ModelUsage[] = Object.entries(allModelsMap)
+    .map(([model, m]) => ({
+      model,
+      totalTokens: m.totalTokens,
+      inputTokens: m.inputTokens,
+      outputTokens: m.outputTokens,
+      cacheReadTokens: m.cacheReadTokens,
+      turns: m.turns,
+      percentage: totalTokens > 0 ? Math.round((m.totalTokens / totalTokens) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.totalTokens - a.totalTokens);
 
   const activeDays = Object.values(days).filter((d) => d.totalTokens > 0).length;
   const dailyAverage = activeDays > 0 ? Math.round(totalTokens / activeDays) : 0;
@@ -388,6 +439,7 @@ export async function aggregateTokens(customSessionsRoot?: string): Promise<Heat
     },
     days,
     sessions: parsedSessions,
+    models,
     startDate,
     endDate,
   };

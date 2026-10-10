@@ -22,6 +22,16 @@ export interface DayStats {
   sessions?: DaySessionDetail[];
 }
 
+export interface ModelUsage {
+  model: string;
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  turns: number;
+  percentage: number;
+}
+
 export interface SessionSummary {
   id: string;
   title: string;
@@ -32,6 +42,7 @@ export interface SessionSummary {
   cacheReadTokens: number;
   turns: number;
   days: Record<string, DayStats>;
+  models?: Record<string, { totalTokens: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; turns: number }>;
 }
 
 export interface SummaryStats {
@@ -51,6 +62,7 @@ export interface HeatmapResponse {
   summary: SummaryStats;
   days: Record<string, DayStats>;
   sessions: SessionSummary[];
+  models?: ModelUsage[];
   startDate: string;
   endDate: string;
 }
@@ -78,6 +90,15 @@ const DEEPSEEK_LEVELS = [
   "#4f85ff", // Level 4: Bright electric DeepSeek blue
 ];
 
+// Clean depth for tiles (subtle glow on peak tiles only)
+const TILE_SHADOWS = [
+  "none",
+  "none",
+  "none",
+  "0 0 3px rgba(51, 109, 250, 0.35)",
+  "0 0 6px rgba(79, 133, 255, 0.65)",
+];
+
 function HeatmapInnerView() {
   const [data, setData] = useState<HeatmapResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,7 +116,27 @@ function HeatmapInnerView() {
     turns: number;
   } | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-resize the settings dialog panel smoothly on mount so it comfortably fits the content
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const panel = document.querySelector('[class*="_panel"]') as HTMLElement | null;
+    if (panel) {
+      const prevWidth = panel.style.width;
+      const prevMaxWidth = panel.style.maxWidth;
+      const prevTransition = panel.style.transition;
+
+      panel.style.transition = "width 0.25s cubic-bezier(0.16, 1, 0.3, 1), max-width 0.25s ease";
+      panel.style.width = "min(1080px, calc(100vw - 32px))";
+      panel.style.maxWidth = "calc(100vw - 32px)";
+
+      return () => {
+        panel.style.width = prevWidth;
+        panel.style.maxWidth = prevMaxWidth;
+        panel.style.transition = prevTransition;
+      };
+    }
+  }, []);
 
   const fetchStats = () => {
     setLoading(true);
@@ -126,6 +167,7 @@ function HeatmapInnerView() {
       return {
         summary: data.summary,
         days: data.days,
+        models: data.models || [],
         sessionTitle: "All Sessions (Global)",
       };
     }
@@ -135,6 +177,7 @@ function HeatmapInnerView() {
       return {
         summary: data.summary,
         days: data.days,
+        models: data.models || [],
         sessionTitle: "All Sessions (Global)",
       };
     }
@@ -180,6 +223,21 @@ function HeatmapInnerView() {
       leveledDays[date] = { ...stats, level: lvl };
     }
 
+    // Models for this session
+    const sessionModels: ModelUsage[] = session.models
+      ? Object.entries(session.models)
+          .map(([model, m]) => ({
+            model,
+            totalTokens: m.totalTokens,
+            inputTokens: m.inputTokens,
+            outputTokens: m.outputTokens,
+            cacheReadTokens: m.cacheReadTokens,
+            turns: m.turns,
+            percentage: totalTokens > 0 ? Math.round((m.totalTokens / totalTokens) * 1000) / 10 : 0,
+          }))
+          .sort((a, b) => b.totalTokens - a.totalTokens)
+      : [];
+
     return {
       summary: {
         totalTokens,
@@ -194,6 +252,7 @@ function HeatmapInnerView() {
         dailyAverage,
       },
       days: leveledDays,
+      models: sessionModels,
       sessionTitle: session.title,
     };
   }, [data, selectedSessionId]);
@@ -260,12 +319,6 @@ function HeatmapInnerView() {
     });
 
     return headers;
-  }, [calendarGrid]);
-
-  useEffect(() => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth;
-    }
   }, [calendarGrid]);
 
   // Daily token timeline chart data for the selected range (14, 30, or 90 days)
@@ -351,12 +404,13 @@ function HeatmapInnerView() {
 
   return (
     <div
+      data-dsh-heatmap="true"
       style={{
         boxSizing: "border-box",
         width: "100%",
-        maxWidth: "960px",
+        maxWidth: "1020px",
         margin: "0 auto",
-        padding: "16px 0 40px",
+        padding: "8px 0 40px",
         fontFamily: "inherit",
         color: "var(--dsw-alias-label-primary, #eeeeee)",
       }}
@@ -369,14 +423,14 @@ function HeatmapInnerView() {
           justifyContent: "space-between",
           flexWrap: "wrap",
           gap: 14,
-          marginBottom: 20,
+          marginBottom: 16,
         }}
       >
         <div>
           <h2
             style={{
               margin: 0,
-              fontSize: 22,
+              fontSize: 20,
               fontWeight: 650,
               letterSpacing: "-0.02em",
               display: "flex",
@@ -401,12 +455,12 @@ function HeatmapInnerView() {
           </h2>
           <p
             style={{
-              margin: "5px 0 0",
-              fontSize: 13,
+              margin: "4px 0 0",
+              fontSize: 12,
               color: "var(--dsw-alias-label-tertiary, #a0a0a0)",
             }}
           >
-            Daily token volume and request step intensity across sessions
+            Daily token throughput and model breakdown across sessions
           </p>
         </div>
 
@@ -464,37 +518,210 @@ function HeatmapInnerView() {
         </div>
       </div>
 
-      {/* Summary Cards Row (Codex / OpenCode style) */}
+      {/* Prominent Centered Total Token Usage Hero (Centered above the chart) */}
+      <div
+        style={{
+          textAlign: "center",
+          margin: "12px 0 20px",
+          padding: "16px 20px",
+          background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
+          border: "1px solid var(--dsw-alias-border-l2, #494949)",
+          borderRadius: 12,
+          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
+        }}
+      >
+        <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--dsw-alias-label-tertiary, #a0a0a0)", fontWeight: 600 }}>
+          Total Tokens Processed
+        </div>
+        <div style={{ fontSize: 36, fontWeight: 800, margin: "6px 0 2px", color: "#4f85ff", letterSpacing: "-0.03em" }}>
+          {formatExact(summary.totalTokens)}
+        </div>
+        <div style={{ fontSize: 13, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
+          <strong>{formatNumber(summary.totalTokens)}</strong> tokens across {summary.activeDays} active days ({summary.totalTurns} total requests)
+        </div>
+      </div>
+
+      {/* Contribution Calendar Card (Centered and scaled to fit without horizontal scrollbars) */}
+      <div
+        style={{
+          background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
+          border: "1px solid var(--dsw-alias-border-l2, #494949)",
+          borderRadius: 12,
+          padding: "18px 20px",
+          position: "relative",
+          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.2)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 12,
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
+          <span>Contribution Calendar</span>
+          {summary.peakDay && (
+            <span style={{ fontSize: 12, fontWeight: 400, color: "var(--dsw-alias-label-secondary)" }}>
+              Peak day: <strong style={{ color: "var(--dsw-alias-label-primary)" }}>{summary.peakDay.date}</strong> ({formatNumber(summary.peakDay.tokens)} tokens)
+            </span>
+          )}
+        </div>
+
+        {/* Clean, centered SVG Calendar Grid (Fits panel smoothly) */}
+        {calendarGrid && (
+          <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <svg
+              viewBox="0 0 770 120"
+              style={{
+                width: "100%",
+                maxWidth: "770px",
+                height: "auto",
+                display: "block",
+                overflow: "visible",
+              }}
+            >
+              {/* Month labels */}
+              {monthHeaders.map((m, i) => (
+                <text
+                  key={i}
+                  x={28 + m.col * 13.8}
+                  y={10}
+                  fontSize={10}
+                  fill="var(--dsw-alias-label-tertiary, #888888)"
+                  fontFamily="inherit"
+                >
+                  {m.label}
+                </text>
+              ))}
+
+              {/* Day of week labels */}
+              <text x={2} y={39} fontSize={9} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
+                Mon
+              </text>
+              <text x={2} y={67} fontSize={9} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
+                Wed
+              </text>
+              <text x={2} y={95} fontSize={9} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
+                Fri
+              </text>
+
+              {/* Day Tiles: centered and proportioned */}
+              {calendarGrid.map((week, colIdx) => (
+                <g key={colIdx} transform={`translate(${28 + colIdx * 13.8}, 18)`}>
+                  {week.map((day, rowIdx) => {
+                    if (!day) return null;
+
+                    const lvl = day.stats.level || 0;
+                    const bg = DEEPSEEK_LEVELS[lvl];
+                    const isSelected = selectedDate === day.date;
+                    const isHovered = hoveredDay?.date === day.date;
+
+                    // GitHub-style glow & outline
+                    const strokeColor = isSelected
+                      ? "#ffffff"
+                      : isHovered
+                      ? "#5686fe"
+                      : lvl === 0
+                      ? "rgba(255, 255, 255, 0.06)"
+                      : "transparent";
+
+                    const strokeWidth = isSelected ? 1.6 : isHovered ? 1.3 : 1;
+
+                    return (
+                      <rect
+                        key={rowIdx}
+                        x={0}
+                        y={rowIdx * 14}
+                        width={11}
+                        height={11}
+                        rx={2}
+                        ry={2}
+                        fill={bg}
+                        stroke={strokeColor}
+                        strokeWidth={strokeWidth}
+                        style={{
+                          cursor: "pointer",
+                          transition: "fill 0.12s ease, stroke 0.12s ease",
+                          filter: isSelected
+                            ? "drop-shadow(0 0 6px rgba(86, 134, 254, 0.9))"
+                            : isHovered
+                            ? "drop-shadow(0 0 4px rgba(86, 134, 254, 0.7))"
+                            : lvl === 4
+                            ? "drop-shadow(0 0 3px rgba(79, 133, 255, 0.5))"
+                            : "none",
+                        }}
+                        onClick={() => {
+                          setSelectedDate(isSelected ? null : day.date);
+                        }}
+                        onMouseEnter={(e) => {
+                          setHoveredDay({ date: day.date, stats: day.stats });
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredDay(null);
+                          setTooltipPos(null);
+                        }}
+                      />
+                    );
+                  })}
+                </g>
+              ))}
+            </svg>
+
+            {/* Bottom Legend */}
+            <div
+              style={{
+                width: "100%",
+                maxWidth: "770px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: 12,
+                fontSize: 11,
+                color: "var(--dsw-alias-label-tertiary, #a0a0a0)",
+              }}
+            >
+              <span style={{ fontSize: 11 }}>
+                Tip: Click any day to inspect sessions and token breakdown
+              </span>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span>Less</span>
+                {DEEPSEEK_LEVELS.map((c, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      width: 11,
+                      height: 11,
+                      borderRadius: 2,
+                      backgroundColor: c,
+                      border: i === 0 ? "1px solid rgba(255, 255, 255, 0.06)" : "none",
+                      filter: i === 4 ? "drop-shadow(0 0 3px rgba(79, 133, 255, 0.5))" : "none",
+                    }}
+                  />
+                ))}
+                <span>More</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Secondary Metrics Grid (Under the chart, cache color cleared to neutral) */}
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
           gap: 12,
-          marginBottom: 20,
+          marginTop: 18,
+          marginBottom: 18,
         }}
       >
-        {/* Card 1: Total Tokens */}
-        <div
-          style={{
-            background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
-            border: "1px solid var(--dsw-alias-border-l2, #494949)",
-            borderRadius: 10,
-            padding: "14px 16px",
-            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
-          }}
-        >
-          <div style={{ fontSize: 11, color: "var(--dsw-alias-label-tertiary, #a0a0a0)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
-            Total Tokens
-          </div>
-          <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0 2px", color: "#4f85ff" }}>
-            {formatNumber(summary.totalTokens)}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
-            {formatExact(summary.totalTokens)} tokens
-          </div>
-        </div>
-
-        {/* Card 2: Cache Hit */}
+        {/* Card 1: Cache Hit Ratio (CLEARED BLUE COLOR -> Neutral/Clean White) */}
         <div
           style={{
             background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
@@ -507,7 +734,7 @@ function HeatmapInnerView() {
           <div style={{ fontSize: 11, color: "var(--dsw-alias-label-tertiary, #a0a0a0)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
             Cache Hit Ratio
           </div>
-          <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0 2px", color: "#38bdf8" }}>
+          <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0 2px", color: "var(--dsw-alias-label-primary, #ffffff)" }}>
             {cacheHitPercent}%
           </div>
           <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
@@ -515,7 +742,7 @@ function HeatmapInnerView() {
           </div>
         </div>
 
-        {/* Card 3: Daily Average / Turns */}
+        {/* Card 2: Daily Average / Turns */}
         <div
           style={{
             background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
@@ -536,7 +763,7 @@ function HeatmapInnerView() {
           </div>
         </div>
 
-        {/* Card 4: Streak / Activity */}
+        {/* Card 3: Streak / Activity */}
         <div
           style={{
             background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
@@ -556,194 +783,107 @@ function HeatmapInnerView() {
             {selectedSessionId === "all" ? `Longest streak: ${summary.longestStreak} days` : `Session: ${activeView.sessionTitle.slice(0, 24)}`}
           </div>
         </div>
-      </div>
 
-      {/* Heatmap Card (Auto-resizes responsive SVG panel, GitHub style) */}
-      <div
-        style={{
-          background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
-          border: "1px solid var(--dsw-alias-border-l2, #494949)",
-          borderRadius: 12,
-          padding: "20px 22px",
-          position: "relative",
-          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.2)",
-        }}
-      >
+        {/* Card 4: Peak Day */}
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 14,
-            fontSize: 13,
-            fontWeight: 600,
+            background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
+            border: "1px solid var(--dsw-alias-border-l2, #494949)",
+            borderRadius: 10,
+            padding: "14px 16px",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
           }}
         >
-          <span>Contribution Calendar</span>
-          {summary.peakDay && (
-            <span style={{ fontSize: 12, fontWeight: 400, color: "var(--dsw-alias-label-secondary)" }}>
-              Peak day: <strong style={{ color: "var(--dsw-alias-label-primary)" }}>{summary.peakDay.date}</strong> ({formatNumber(summary.peakDay.tokens)} tokens)
-            </span>
-          )}
+          <div style={{ fontSize: 11, color: "var(--dsw-alias-label-tertiary, #a0a0a0)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
+            Peak Volume Day
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 700, margin: "6px 0 2px", color: "var(--dsw-alias-label-primary, #ffffff)" }}>
+            {summary.peakDay ? formatNumber(summary.peakDay.tokens) : "None"}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
+            {summary.peakDay ? summary.peakDay.date : "No activity"}
+          </div>
         </div>
+      </div>
 
-        {/* Generously sized GitHub-Style Calendar with smooth horizontal scroll */}
-        {calendarGrid && (
+      {/* Top Models Breakdown Section */}
+      {activeView.models && activeView.models.length > 0 && (
+        <div
+          style={{
+            background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
+            border: "1px solid var(--dsw-alias-border-l2, #494949)",
+            borderRadius: 12,
+            padding: "18px 20px",
+            marginBottom: 18,
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
+          }}
+        >
           <div
-            ref={scrollContainerRef}
             style={{
-              width: "100%",
-              overflowX: "auto",
-              WebkitOverflowScrolling: "touch",
-              paddingBottom: "10px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 12,
             }}
           >
-            <div style={{ minWidth: "920px", width: "100%", display: "inline-block" }}>
-              <svg
-                viewBox="0 0 920 152"
-                style={{
-                  width: "100%",
-                  minWidth: "920px",
-                  height: "152px",
-                  display: "block",
-                  overflow: "visible",
-                }}
-              >
-                {/* Month labels */}
-                {monthHeaders.map((m, i) => (
-                  <text
-                    key={i}
-                    x={36 + m.col * 16.5}
-                    y={12}
-                    fontSize={11}
-                    fill="var(--dsw-alias-label-tertiary, #888888)"
-                    fontFamily="inherit"
-                  >
-                    {m.label}
-                  </text>
-                ))}
-
-                {/* Day of week labels */}
-                <text x={4} y={51} fontSize={10} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
-                  Mon
-                </text>
-                <text x={4} y={85} fontSize={10} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
-                  Wed
-                </text>
-                <text x={4} y={119} fontSize={10} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
-                  Fri
-                </text>
-
-                {/* Day Tiles: Generously sized 13px tiles with 16.5px step */}
-                {calendarGrid.map((week, colIdx) => (
-                  <g key={colIdx} transform={`translate(${36 + colIdx * 16.5}, 22)`}>
-                    {week.map((day, rowIdx) => {
-                      if (!day) return null;
-
-                      const lvl = day.stats.level || 0;
-                      const bg = DEEPSEEK_LEVELS[lvl];
-                      const isSelected = selectedDate === day.date;
-                      const isHovered = hoveredDay?.date === day.date;
-
-                      // GitHub-style glow & outline
-                      const strokeColor = isSelected
-                        ? "#ffffff"
-                        : isHovered
-                        ? "#5686fe"
-                        : lvl === 0
-                        ? "rgba(255, 255, 255, 0.06)"
-                        : "transparent";
-
-                      const strokeWidth = isSelected ? 2 : isHovered ? 1.5 : 1;
-
-                      return (
-                        <rect
-                          key={rowIdx}
-                          x={0}
-                          y={rowIdx * 17}
-                          width={13}
-                          height={13}
-                          rx={2.5}
-                          ry={2.5}
-                          fill={bg}
-                          stroke={strokeColor}
-                          strokeWidth={strokeWidth}
-                          style={{
-                            cursor: "pointer",
-                            transition: "fill 0.12s ease, stroke 0.12s ease",
-                            filter: isSelected
-                              ? "drop-shadow(0 0 6px rgba(86, 134, 254, 0.9))"
-                              : isHovered
-                              ? "drop-shadow(0 0 4px rgba(86, 134, 254, 0.7))"
-                              : lvl === 4
-                              ? "drop-shadow(0 0 4px rgba(79, 133, 255, 0.6))"
-                              : "none",
-                          }}
-                          onClick={() => {
-                            setSelectedDate(isSelected ? null : day.date);
-                          }}
-                          onMouseEnter={(e) => {
-                            setHoveredDay({ date: day.date, stats: day.stats });
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
-                          }}
-                          onMouseLeave={() => {
-                            setHoveredDay(null);
-                            setTooltipPos(null);
-                          }}
-                        />
-                      );
-                    })}
-                  </g>
-                ))}
-              </svg>
+            <div style={{ fontSize: 13, fontWeight: 650, color: "var(--dsw-alias-label-primary, #ffffff)" }}>
+              Model Usage Breakdown
             </div>
-
-            {/* Bottom Legend */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginTop: 14,
-                fontSize: 11,
-                color: "var(--dsw-alias-label-tertiary, #a0a0a0)",
-              }}
-            >
-              <span style={{ fontSize: 11 }}>
-                Tip: Click any day to inspect sessions and token breakdown
-              </span>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span>Less</span>
-                {DEEPSEEK_LEVELS.map((c, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      width: 12.5,
-                      height: 12.5,
-                      borderRadius: 2.5,
-                      backgroundColor: c,
-                      border: i === 0 ? "1px solid rgba(255, 255, 255, 0.06)" : "none",
-                      filter: i === 4 ? "drop-shadow(0 0 3px rgba(79, 133, 255, 0.5))" : "none",
-                    }}
-                  />
-                ))}
-                <span>More</span>
-              </div>
+            <div style={{ fontSize: 11, color: "var(--dsw-alias-label-tertiary, #a0a0a0)" }}>
+              {activeView.models.length} model{activeView.models.length === 1 ? "" : "s"} tracked
             </div>
           </div>
-        )}
-      </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {activeView.models.map((m) => (
+              <div key={m.model}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 12,
+                    marginBottom: 5,
+                  }}
+                >
+                  <span style={{ fontWeight: 600, color: "var(--dsw-alias-label-primary)" }}>
+                    {m.model}
+                  </span>
+                  <span style={{ color: "var(--dsw-alias-label-secondary)" }}>
+                    <strong style={{ color: "#4f85ff" }}>{formatNumber(m.totalTokens)}</strong> ({m.percentage}%) · {m.turns} requests
+                  </span>
+                </div>
+                <div
+                  style={{
+                    width: "100%",
+                    height: 6,
+                    background: "rgba(255, 255, 255, 0.06)",
+                    borderRadius: 3,
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.max(1, m.percentage)}%`,
+                      height: "100%",
+                      background: "#336dfa",
+                      borderRadius: 3,
+                      transition: "width 0.3s ease",
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Token Usage Trends Graph Card */}
       <div
         style={{
-          marginTop: 18,
           background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
           border: "1px solid var(--dsw-alias-border-l2, #494949)",
           borderRadius: 12,
-          padding: "20px 22px",
+          padding: "18px 20px",
           position: "relative",
           boxShadow: "0 4px 16px rgba(0, 0, 0, 0.2)",
         }}
@@ -759,10 +899,10 @@ function HeatmapInnerView() {
           }}
         >
           <div>
-            <div style={{ fontSize: 14, fontWeight: 650, color: "var(--dsw-alias-label-primary, #ffffff)" }}>
+            <div style={{ fontSize: 13, fontWeight: 650, color: "var(--dsw-alias-label-primary, #ffffff)" }}>
               Token Usage Trends
             </div>
-            <div style={{ fontSize: 12, color: "var(--dsw-alias-label-tertiary, #a0a0a0)", marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: "var(--dsw-alias-label-tertiary, #a0a0a0)", marginTop: 2 }}>
               Daily billed vs cached token volume over time
             </div>
           </div>
@@ -771,11 +911,11 @@ function HeatmapInnerView() {
             {/* Legend: Billed vs Cached */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 11, color: "var(--dsw-alias-label-secondary)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ width: 9, height: 9, borderRadius: 2, background: "#4f85ff" }} />
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: "#4f85ff" }} />
                 <span>Billed Tokens</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ width: 9, height: 9, borderRadius: 2, background: "#253b82" }} />
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: "#253b82" }} />
                 <span>Cache Reads</span>
               </div>
             </div>
@@ -814,7 +954,7 @@ function HeatmapInnerView() {
 
         {/* The SVG Timeline Bar Chart */}
         <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-          <div style={{ minWidth: "720px", width: "100%" }}>
+          <div style={{ minWidth: "680px", width: "100%" }}>
             <svg
               viewBox="0 0 880 180"
               style={{ width: "100%", height: "180px", display: "block", overflow: "visible" }}
@@ -1029,7 +1169,7 @@ function HeatmapInnerView() {
               </div>
               <div style={{ padding: "6px 12px", background: "var(--dsw-alias-bg-layer-1, #1e1e1e)", borderRadius: 6, border: "1px solid var(--dsw-alias-border-l1)" }}>
                 <span style={{ color: "var(--dsw-alias-label-tertiary)" }}>Cache Reads: </span>
-                <strong style={{ color: "#38bdf8" }}>{formatNumber(inspectedDayStats.cacheReadTokens)}</strong> (
+                <strong>{formatNumber(inspectedDayStats.cacheReadTokens)}</strong> (
                 {Math.round((inspectedDayStats.cacheReadTokens / inspectedDayStats.totalTokens) * 100)}%)
               </div>
             </div>
@@ -1038,7 +1178,7 @@ function HeatmapInnerView() {
           {/* Sessions List for that Day */}
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: "var(--dsw-alias-label-primary)", marginBottom: 10 }}>
-              Sessions Active on this Day ({inspectedDayStats?.sessions?.length || 0})
+              Sessions Active on this Day ({(inspectedDayStats?.sessions || []).length})
             </div>
 
             {inspectedDayStats?.sessions && inspectedDayStats.sessions.length > 0 ? (
@@ -1085,7 +1225,7 @@ function HeatmapInnerView() {
         </div>
       )}
 
-      {/* Floating Hover Tooltip */}
+      {/* Floating Hover Tooltip for Calendar Day */}
       {hoveredDay && tooltipPos && !selectedDate && (
         <div
           style={{
