@@ -127,7 +127,7 @@ export function HeatmapView() {
       };
     }
 
-    const session = data.sessions.find((s) => s.id === selectedSessionId);
+    const session = (data.sessions || []).find((s) => s.id === selectedSessionId);
     if (!session) {
       return {
         summary: data.summary,
@@ -383,8 +383,8 @@ export function HeatmapView() {
                 maxWidth: 240,
               }}
             >
-              <option value="all">All Sessions ({data.sessions.length} total)</option>
-              {data.sessions.map((s) => (
+              <option value="all">All Sessions ({(data.sessions || []).length} total)</option>
+              {(data.sessions || []).map((s) => (
                 <option key={s.id} value={s.id}>
                   {new Date(s.createdAt).toLocaleDateString()} · {s.title.slice(0, 32)}
                 </option>
@@ -537,7 +537,7 @@ export function HeatmapView() {
           )}
         </div>
 
-        {/* Comfortably sized GitHub-Style Calendar SVG with smooth horizontal scroll */}
+        {/* Generously sized GitHub-Style Calendar with smooth horizontal scroll */}
         {calendarGrid && (
           <div
             ref={scrollContainerRef}
@@ -545,107 +545,109 @@ export function HeatmapView() {
               width: "100%",
               overflowX: "auto",
               WebkitOverflowScrolling: "touch",
-              paddingBottom: "8px",
+              paddingBottom: "10px",
             }}
           >
-            <svg
-              viewBox="0 0 895 142"
-              style={{
-                width: "100%",
-                minWidth: "860px",
-                height: "142px",
-                display: "block",
-                overflow: "visible",
-              }}
-            >
-              {/* Month labels */}
-              {monthHeaders.map((m, i) => (
-                <text
-                  key={i}
-                  x={34 + m.col * 16}
-                  y={12}
-                  fontSize={11}
-                  fill="var(--dsw-alias-label-tertiary, #888888)"
-                  fontFamily="inherit"
-                >
-                  {m.label}
+            <div style={{ minWidth: "920px", width: "100%", display: "inline-block" }}>
+              <svg
+                viewBox="0 0 920 152"
+                style={{
+                  width: "100%",
+                  minWidth: "920px",
+                  height: "152px",
+                  display: "block",
+                  overflow: "visible",
+                }}
+              >
+                {/* Month labels */}
+                {monthHeaders.map((m, i) => (
+                  <text
+                    key={i}
+                    x={36 + m.col * 16.5}
+                    y={12}
+                    fontSize={11}
+                    fill="var(--dsw-alias-label-tertiary, #888888)"
+                    fontFamily="inherit"
+                  >
+                    {m.label}
+                  </text>
+                ))}
+
+                {/* Day of week labels */}
+                <text x={4} y={51} fontSize={10} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
+                  Mon
                 </text>
-              ))}
+                <text x={4} y={85} fontSize={10} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
+                  Wed
+                </text>
+                <text x={4} y={119} fontSize={10} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
+                  Fri
+                </text>
 
-              {/* Day of week labels */}
-              <text x={4} y={49} fontSize={10} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
-                Mon
-              </text>
-              <text x={4} y={81} fontSize={10} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
-                Wed
-              </text>
-              <text x={4} y={113} fontSize={10} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
-                Fri
-              </text>
+                {/* Day Tiles: Generously sized 13px tiles with 16.5px step */}
+                {calendarGrid.map((week, colIdx) => (
+                  <g key={colIdx} transform={`translate(${36 + colIdx * 16.5}, 22)`}>
+                    {week.map((day, rowIdx) => {
+                      if (!day) return null;
 
-              {/* Day Tiles: comfortable 12.5px size with 16px step */}
-              {calendarGrid.map((week, colIdx) => (
-                <g key={colIdx} transform={`translate(${34 + colIdx * 16}, 22)`}>
-                  {week.map((day, rowIdx) => {
-                    if (!day) return null;
+                      const lvl = day.stats.level || 0;
+                      const bg = DEEPSEEK_LEVELS[lvl];
+                      const isSelected = selectedDate === day.date;
+                      const isHovered = hoveredDay?.date === day.date;
 
-                    const lvl = day.stats.level || 0;
-                    const bg = DEEPSEEK_LEVELS[lvl];
-                    const isSelected = selectedDate === day.date;
-                    const isHovered = hoveredDay?.date === day.date;
+                      // GitHub-style glow & outline
+                      const strokeColor = isSelected
+                        ? "#ffffff"
+                        : isHovered
+                        ? "#5686fe"
+                        : lvl === 0
+                        ? "rgba(255, 255, 255, 0.06)"
+                        : "transparent";
 
-                    // GitHub-style glow & outline
-                    const strokeColor = isSelected
-                      ? "#ffffff"
-                      : isHovered
-                      ? "#5686fe"
-                      : lvl === 0
-                      ? "rgba(255, 255, 255, 0.06)"
-                      : "transparent";
+                      const strokeWidth = isSelected ? 2 : isHovered ? 1.5 : 1;
 
-                    const strokeWidth = isSelected ? 1.8 : isHovered ? 1.4 : 1;
-
-                    return (
-                      <rect
-                        key={rowIdx}
-                        x={0}
-                        y={rowIdx * 16}
-                        width={12.5}
-                        height={12.5}
-                        rx={2.5}
-                        ry={2.5}
-                        fill={bg}
-                        stroke={strokeColor}
-                        strokeWidth={strokeWidth}
-                        style={{
-                          cursor: "pointer",
-                          transition: "fill 0.12s ease, stroke 0.12s ease",
-                          filter: isSelected
-                            ? "drop-shadow(0 0 6px rgba(86, 134, 254, 0.9))"
-                            : isHovered
-                            ? "drop-shadow(0 0 4px rgba(86, 134, 254, 0.7))"
-                            : lvl === 4
-                            ? "drop-shadow(0 0 4px rgba(79, 133, 255, 0.6))"
-                            : "none",
-                        }}
-                        onClick={() => {
-                          setSelectedDate(isSelected ? null : day.date);
-                        }}
-                        onMouseEnter={(e) => {
-                          setHoveredDay({ date: day.date, stats: day.stats });
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
-                        }}
-                        onMouseLeave={() => {
-                          setHoveredDay(null);
-                          setTooltipPos(null);
-                        }}
-                      />
-                    );
-                  })}
-                </g>
-              ))}
-            </svg>
+                      return (
+                        <rect
+                          key={rowIdx}
+                          x={0}
+                          y={rowIdx * 17}
+                          width={13}
+                          height={13}
+                          rx={2.5}
+                          ry={2.5}
+                          fill={bg}
+                          stroke={strokeColor}
+                          strokeWidth={strokeWidth}
+                          style={{
+                            cursor: "pointer",
+                            transition: "fill 0.12s ease, stroke 0.12s ease",
+                            filter: isSelected
+                              ? "drop-shadow(0 0 6px rgba(86, 134, 254, 0.9))"
+                              : isHovered
+                              ? "drop-shadow(0 0 4px rgba(86, 134, 254, 0.7))"
+                              : lvl === 4
+                              ? "drop-shadow(0 0 4px rgba(79, 133, 255, 0.6))"
+                              : "none",
+                          }}
+                          onClick={() => {
+                            setSelectedDate(isSelected ? null : day.date);
+                          }}
+                          onMouseEnter={(e) => {
+                            setHoveredDay({ date: day.date, stats: day.stats });
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
+                          }}
+                          onMouseLeave={() => {
+                            setHoveredDay(null);
+                            setTooltipPos(null);
+                          }}
+                        />
+                      );
+                    })}
+                  </g>
+                ))}
+              </svg>
+            </div>
 
             {/* Bottom Legend */}
             <div
