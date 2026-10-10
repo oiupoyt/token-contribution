@@ -84,7 +84,16 @@ function HeatmapInnerView() {
   const [error, setError] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("all");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [chartRange, setChartRange] = useState<14 | 30 | 90>(30);
   const [hoveredDay, setHoveredDay] = useState<{ date: string; stats: DayStats } | null>(null);
+  const [hoveredBar, setHoveredBar] = useState<{
+    date: string;
+    label: string;
+    totalTokens: number;
+    billedTokens: number;
+    cachedTokens: number;
+    turns: number;
+  } | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -258,6 +267,47 @@ function HeatmapInnerView() {
       scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth;
     }
   }, [calendarGrid]);
+
+  // Daily token timeline chart data for the selected range (14, 30, or 90 days)
+  const chartData = useMemo(() => {
+    if (!activeView) return [];
+    const now = new Date();
+    const items: Array<{
+      date: string;
+      label: string;
+      totalTokens: number;
+      billedTokens: number;
+      cachedTokens: number;
+      turns: number;
+    }> = [];
+
+    for (let i = chartRange - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const stats = activeView.days[dateKey] || {
+        totalTokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        turns: 0,
+      };
+      items.push({
+        date: dateKey,
+        label: `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`,
+        totalTokens: stats.totalTokens,
+        billedTokens: stats.inputTokens + stats.outputTokens,
+        cachedTokens: stats.cacheReadTokens,
+        turns: stats.turns,
+      });
+    }
+    return items;
+  }, [activeView, chartRange]);
+
+  const maxChartTokens = useMemo(() => {
+    return Math.max(...chartData.map((d) => d.totalTokens), 1_000_000);
+  }, [chartData]);
 
   if (loading && !data) {
     return (
@@ -686,6 +736,216 @@ function HeatmapInnerView() {
         )}
       </div>
 
+      {/* Token Usage Trends Graph Card */}
+      <div
+        style={{
+          marginTop: 18,
+          background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
+          border: "1px solid var(--dsw-alias-border-l2, #494949)",
+          borderRadius: 12,
+          padding: "20px 22px",
+          position: "relative",
+          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.2)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 12,
+            marginBottom: 16,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 650, color: "var(--dsw-alias-label-primary, #ffffff)" }}>
+              Token Usage Trends
+            </div>
+            <div style={{ fontSize: 12, color: "var(--dsw-alias-label-tertiary, #a0a0a0)", marginTop: 2 }}>
+              Daily billed vs cached token volume over time
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            {/* Legend: Billed vs Cached */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 11, color: "var(--dsw-alias-label-secondary)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ width: 9, height: 9, borderRadius: 2, background: "#4f85ff" }} />
+                <span>Billed Tokens</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ width: 9, height: 9, borderRadius: 2, background: "#253b82" }} />
+                <span>Cache Reads</span>
+              </div>
+            </div>
+
+            {/* Range Toggle: 14D | 30D | 90D */}
+            <div
+              style={{
+                display: "inline-flex",
+                background: "var(--dsw-alias-bg-layer-1, #1e1e1e)",
+                border: "1px solid var(--dsw-alias-border-l2, #494949)",
+                borderRadius: 8,
+                padding: 2,
+              }}
+            >
+              {[14, 30, 90].map((days) => (
+                <button
+                  key={days}
+                  onClick={() => setChartRange(days as any)}
+                  style={{
+                    border: 0,
+                    background: chartRange === days ? "var(--dsw-alias-bg-layer-2, #2c2c2c)" : "transparent",
+                    color: chartRange === days ? "#4f85ff" : "var(--dsw-alias-label-tertiary)",
+                    fontSize: 11,
+                    padding: "3px 8px",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    fontWeight: chartRange === days ? 600 : 400,
+                  }}
+                >
+                  {days}D
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* The SVG Timeline Bar Chart */}
+        <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <div style={{ minWidth: "720px", width: "100%" }}>
+            <svg
+              viewBox="0 0 880 180"
+              style={{ width: "100%", height: "180px", display: "block", overflow: "visible" }}
+            >
+              {/* Horizontal grid lines & Y labels */}
+              {[1, 0.66, 0.33, 0].map((ratio, i) => {
+                const y = 20 + (1 - ratio) * 125;
+                const tokenVal = Math.round(maxChartTokens * ratio);
+                return (
+                  <g key={i}>
+                    <line
+                      x1={45}
+                      y1={y}
+                      x2={870}
+                      y2={y}
+                      stroke="var(--dsw-alias-border-l1, rgba(255,255,255,0.08))"
+                      strokeDasharray="4 4"
+                    />
+                    <text
+                      x={40}
+                      y={y + 3}
+                      fontSize={9}
+                      fill="var(--dsw-alias-label-tertiary, #888888)"
+                      textAnchor="end"
+                      fontFamily="inherit"
+                    >
+                      {formatNumber(tokenVal)}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Bars for each day in chartData */}
+              {chartData.map((d, idx) => {
+                const totalBarWidth = 825 / chartData.length;
+                const barWidth = Math.max(5, Math.min(22, totalBarWidth - 5));
+                const x = 50 + idx * totalBarWidth + (totalBarWidth - barWidth) / 2;
+
+                const totalH = (d.totalTokens / maxChartTokens) * 125;
+                const cachedH = d.totalTokens > 0 ? (d.cachedTokens / d.totalTokens) * totalH : 0;
+                const billedH = totalH - cachedH;
+                const yBase = 145;
+
+                const isHovered = hoveredBar?.date === d.date;
+
+                return (
+                  <g
+                    key={idx}
+                    style={{ cursor: "pointer" }}
+                    onMouseEnter={(e) => {
+                      setHoveredBar(d);
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top - 8 });
+                    }}
+                    onMouseLeave={() => {
+                      setHoveredBar(null);
+                      setTooltipPos(null);
+                    }}
+                    onClick={() => setSelectedDate(selectedDate === d.date ? null : d.date)}
+                  >
+                    {/* Hover hit area */}
+                    <rect
+                      x={x - 2}
+                      y={20}
+                      width={barWidth + 4}
+                      height={125}
+                      fill={isHovered ? "rgba(79, 133, 255, 0.08)" : "transparent"}
+                      rx={3}
+                    />
+
+                    {/* Empty/Zero line marker if 0 tokens */}
+                    {d.totalTokens === 0 ? (
+                      <rect
+                        x={x}
+                        y={yBase - 2}
+                        width={barWidth}
+                        height={2}
+                        fill="rgba(255, 255, 255, 0.08)"
+                        rx={1}
+                      />
+                    ) : (
+                      <g>
+                        {/* Cached segment (bottom) */}
+                        {cachedH > 0 && (
+                          <rect
+                            x={x}
+                            y={yBase - cachedH}
+                            width={barWidth}
+                            height={cachedH}
+                            fill="#253b82"
+                            rx={billedH <= 0 ? 2 : 0}
+                          />
+                        )}
+                        {/* Billed segment (top) */}
+                        {billedH > 0 && (
+                          <rect
+                            x={x}
+                            y={yBase - totalH}
+                            width={barWidth}
+                            height={billedH}
+                            fill={isHovered ? "#60a5fa" : "#4f85ff"}
+                            rx={2}
+                            style={{
+                              filter: isHovered ? "drop-shadow(0 0 5px rgba(79, 133, 255, 0.8))" : "none",
+                            }}
+                          />
+                        )}
+                      </g>
+                    )}
+
+                    {/* X-axis date labels: show every Nth label depending on range */}
+                    {(chartRange === 14 || idx % (chartRange === 30 ? 3 : 7) === 0) && (
+                      <text
+                        x={x + barWidth / 2}
+                        y={162}
+                        fontSize={9}
+                        fill="var(--dsw-alias-label-tertiary, #888888)"
+                        textAnchor="middle"
+                        fontFamily="inherit"
+                      >
+                        {d.label}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        </div>
+      </div>
+
       {/* Day Inspection Detail Drawer (Opens when any day is clicked) */}
       {selectedDate && (
         <div
@@ -865,6 +1125,52 @@ function HeatmapInnerView() {
               </div>
               <div style={{ fontSize: 10, color: "var(--dsw-alias-label-tertiary)", marginTop: 4 }}>
                 Click to inspect sessions on this day
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Floating Hover Tooltip for Chart Bar */}
+      {hoveredBar && tooltipPos && (
+        <div
+          style={{
+            position: "fixed",
+            left: tooltipPos.x,
+            top: tooltipPos.y,
+            transform: "translate(-50%, -100%)",
+            background: "var(--dsw-alias-bg-layer-1, #1e1e1e)",
+            border: "1px solid var(--dsw-alias-border-l3, #555555)",
+            borderRadius: 8,
+            padding: "8px 12px",
+            fontSize: 12,
+            lineHeight: 1.4,
+            boxShadow: "0 6px 18px rgba(0,0,0,0.35)",
+            pointerEvents: "none",
+            zIndex: 9999,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <div style={{ fontWeight: 650, color: "var(--dsw-alias-label-primary, #ffffff)", marginBottom: 4 }}>
+            {new Date(hoveredBar.date + "T00:00:00").toLocaleDateString(undefined, {
+              weekday: "short",
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })}
+          </div>
+          {hoveredBar.totalTokens === 0 ? (
+            <div style={{ color: "var(--dsw-alias-label-tertiary)" }}>No activity recorded</div>
+          ) : (
+            <div>
+              <div style={{ color: "#4f85ff", fontWeight: 600 }}>
+                {formatExact(hoveredBar.totalTokens)} total tokens
+              </div>
+              <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary)", marginTop: 2 }}>
+                Billed: {formatNumber(hoveredBar.billedTokens)} · Cached: {formatNumber(hoveredBar.cachedTokens)}
+              </div>
+              <div style={{ fontSize: 10, color: "var(--dsw-alias-label-tertiary)", marginTop: 4 }}>
+                {hoveredBar.turns} turns · Click to inspect day
               </div>
             </div>
           )}
