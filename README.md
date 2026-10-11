@@ -4,6 +4,29 @@ Visualizes your daily token consumption, prompt intensity, cache hit efficiency,
 
 ---
 
+## Installation
+
+Install with a single command via the official DSH CLI (automatically downloads, registers, and activates the bundle in your web profile):
+
+```bash
+dsh plugin --profile web add dsh-token-heatmap
+```
+
+*(To remove later: `dsh plugin --profile web remove dsh-token-heatmap`)*
+
+
+---
+
+### Manual Alternative (pnpm)
+
+```bash
+cd ~/.dsh/profiles/web
+pnpm add dsh-token-heatmap
+```
+Then add `"dsh-token-heatmap"` to `bundles` in `~/.dsh/profiles/web/package.json`.
+
+---
+
 ## Features
 
 - **52-Week GitHub Contribution Calendar:** 7 rows × 52 columns tracking daily token activity with 4-level color intensity.
@@ -18,30 +41,6 @@ Visualizes your daily token consumption, prompt intensity, cache hit efficiency,
 - **Session Token Meter Integration:** Integrates into session stats pills with a *"View 12-Month Activity Heatmap"* button that opens the interactive modal dialog anywhere.
 - **High-Performance Parser:** Aggregates zstandard (`.jsonl.zstd`) session logs with timestamp and mtime caching for near-instant rendering.
 - **DeepSeek Native Theme:** Automatically adapts to DSH dark and light themes using `--dsw-alias-*` design tokens.
-
----
-
-## Installation
-
-## Installation
-
-Install with a single command via the official DSH CLI (automatically downloads, registers, and activates the bundle in your web profile):
-
-```bash
-dsh plugin --profile web add dsh-token-heatmap
-```
-
-*(To remove later: `dsh plugin --profile web remove dsh-token-heatmap`)*
-
----
-
-### Manual Alternative (pnpm)
-
-```bash
-cd ~/.dsh/profiles/web
-pnpm add dsh-token-heatmap
-```
-Then add `"dsh-token-heatmap"` to `bundles` in `~/.dsh/profiles/web/package.json`.
 
 ---
 
