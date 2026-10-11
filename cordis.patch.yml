@@ -1,4 +1,4 @@
-# dsh-token-heatmap bundle patch
+# token-contribution bundle patch
 - insert:
-    - id: token-heatmap
-      name: 'dsh-token-heatmap'
+    - id: token-contribution
+      name: 'token-contribution'

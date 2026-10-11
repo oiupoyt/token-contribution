@@ -3,19 +3,19 @@ import { createRoot } from "react-dom/client";
 import { HeatmapView } from "./HeatmapView.js";
 import { HeatmapModal } from "./HeatmapModal.js";
 
-export const name = "dsh-plugin-token-heatmap-client";
+export const name = "token-contribution-client";
 export const inject = ["slots"];
 
 export function apply(ctx: any) {
-  // 1. Register under Settings -> "Token Heatmap"
+  // 1. Register under Settings -> "Token Contribution"
   if (ctx.slots && typeof ctx.slots.inject === "function") {
     ctx.slots.inject("settings.section", () => {
       return ctx.slots.register(
         {
           name: "settings.section",
-          id: "token-heatmap",
+          id: "token-contribution",
           order: 14,
-          label: () => "Token Heatmap",
+          label: () => "Token Contribution",
           icon: "chart",
         },
         HeatmapView
@@ -42,7 +42,7 @@ export function apply(ctx: any) {
     }
 
     const modalContainer = document.createElement("div");
-    modalContainer.id = "dsh-token-heatmap-modal-root";
+    modalContainer.id = "token-contribution-modal-root";
     document.body.appendChild(modalContainer);
 
     const root = createRoot(modalContainer);
@@ -54,12 +54,14 @@ export function apply(ctx: any) {
         const handleOpen = () => setIsOpen(true);
         const handleClose = () => setIsOpen(false);
 
+        window.addEventListener("dsh:open-token-contribution", handleOpen);
         window.addEventListener("dsh:open-token-heatmap", handleOpen);
         window.addEventListener("keydown", (e) => {
           if (e.key === "Escape") handleClose();
         });
 
         return () => {
+          window.removeEventListener("dsh:open-token-contribution", handleOpen);
           window.removeEventListener("dsh:open-token-heatmap", handleOpen);
         };
       }, []);
@@ -86,7 +88,7 @@ export function apply(ctx: any) {
       const button = document.createElement("button");
       button.className = "dsh-heatmap-trigger-btn";
       button.type = "button";
-      button.innerHTML = "<span>View Token Usage Heatmap →</span>";
+      button.innerHTML = "<span>View Token Contribution →</span>";
       button.style.cssText = `
         display: flex;
         align-items: center;
@@ -128,18 +130,18 @@ export function apply(ctx: any) {
           setTimeout(() => {
             const heatmapTab = Array.from(document.querySelectorAll("*")).find(
               (el) =>
-                el.textContent?.trim() === "Token Heatmap" &&
+                (el.textContent?.trim() === "Token Contribution" || el.textContent?.trim() === "Token Heatmap") &&
                 (el.tagName === "BUTTON" || el.tagName === "DIV" || el.getAttribute("role") === "tab" || el.classList.contains("ant-list-item"))
             );
             if (heatmapTab) {
               (heatmapTab as HTMLElement).click();
             } else {
-              window.dispatchEvent(new CustomEvent("dsh:open-token-heatmap"));
+              window.dispatchEvent(new CustomEvent("dsh:open-token-contribution"));
             }
           }, 120);
         } else {
           // Open direct interactive modal
-          window.dispatchEvent(new CustomEvent("dsh:open-token-heatmap"));
+          window.dispatchEvent(new CustomEvent("dsh:open-token-contribution"));
         }
       };
 

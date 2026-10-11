@@ -1,7 +1,7 @@
 {
-  "name": "dsh-token-heatmap",
-  "version": "0.1.2",
-  "description": "GitHub-style token usage contribution heatmap and analytics for DeepSeek Harness",
+  "name": "token-contribution",
+  "version": "0.1.0",
+  "description": "GitHub-style token usage contribution calendar and analytics for DeepSeek Harness",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
@@ -47,10 +47,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://git.oiupoyt.space/oiupoyt/dsh-plugin-token-heatmap.git"
+    "url": "https://git.oiupoyt.space/oiupoyt/token-contribution.git"
   },
   "bugs": {
-    "url": "https://git.oiupoyt.space/oiupoyt/dsh-plugin-token-heatmap/issues"
+    "url": "https://git.oiupoyt.space/oiupoyt/token-contribution/issues"
   },
-  "homepage": "https://git.oiupoyt.space/oiupoyt/dsh-plugin-token-heatmap#readme"
+  "homepage": "https://git.oiupoyt.space/oiupoyt/token-contribution#readme"
 }

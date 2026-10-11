@@ -1,11 +1,11 @@
-export const name = "dsh-plugin-token-heatmap";
+export const name = "token-contribution";
 export const inject = ["webServer"];
 
 export function apply(ctx: any) {
   ctx.effect(() =>
     ctx.webServer.register({
       kind: "prefix",
-      path: "/api/dsh-token-heatmap",
+      path: "/api/token-contribution",
       handler: async (req: any, res: any) => {
         const url = new URL(req.url, "http://localhost");
         const pathname = url.pathname.replace(/\/+$/, "");
@@ -20,7 +20,7 @@ export function apply(ctx: any) {
           return;
         }
 
-        if (req.method === "GET" && (pathname === "/api/dsh-token-heatmap" || pathname === "/api/dsh-token-heatmap/stats")) {
+        if (req.method === "GET" && (pathname === "/api/token-contribution" || pathname === "/api/token-contribution/stats" || pathname === "/api/dsh-token-heatmap/stats")) {
           try {
             const { aggregateTokens } = await import(`./aggregator.js?t=${Date.now()}`);
             const data = await aggregateTokens();

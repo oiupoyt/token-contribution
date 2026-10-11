@@ -149,7 +149,7 @@ function HeatmapInnerView() {
 
   const fetchStats = () => {
     setLoading(true);
-    fetch("/api/dsh-token-heatmap/stats")
+    fetch("/api/token-contribution/stats")
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP error ${r.status}`);
         return r.json();

@@ -1,6 +1,6 @@
-# dsh-token-heatmap
+# token-contribution
 
-> GitHub-style daily token usage heatmap, model analytics, and timeline trends for [DeepSeek Harness](https://github.com/deepseek-ai/dsh).
+> GitHub-style daily token usage contribution calendar, model analytics, and timeline trends for [DeepSeek Harness](https://github.com/deepseek-ai/dsh).
 
 ---
 
@@ -9,18 +9,18 @@
 Install with a single command via the official DSH CLI:
 
 ```bash
-dsh plugin --profile web add dsh-token-heatmap
+dsh plugin --profile web add token-contribution
 ```
 
-*(To remove later: `dsh plugin --profile web remove dsh-token-heatmap`)*
+*(To remove later: `dsh plugin --profile web remove token-contribution`)*
 
 ### Manual Alternative (pnpm)
 
 ```bash
 cd ~/.dsh/profiles/web
-pnpm add dsh-token-heatmap
+pnpm add token-contribution
 ```
-Then add `"dsh-token-heatmap"` to `bundles` in `~/.dsh/profiles/web/package.json`.
+Then add `"token-contribution"` to `bundles` in `~/.dsh/profiles/web/package.json`.
 
 ---
 
