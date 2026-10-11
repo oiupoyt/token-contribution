@@ -116,19 +116,28 @@ function HeatmapInnerView() {
     turns: number;
   } | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
-  // Auto-resize the settings dialog panel smoothly on mount so it comfortably fits the content
+  // Dynamically enlarge the DSH Settings dialog panel so the calendar fits perfectly without a scrollbar
   useEffect(() => {
     if (typeof document === "undefined") return;
-    const panel = document.querySelector('[class*="_panel"]') as HTMLElement | null;
+    const findPanel = () => {
+      return (
+        rootRef.current?.closest('[class*="_panel"]') ||
+        document.querySelector('.VOzbGW_panel') ||
+        document.querySelector('[class*="_panel"]')
+      ) as HTMLElement | null;
+    };
+
+    const panel = findPanel();
     if (panel) {
       const prevWidth = panel.style.width;
       const prevMaxWidth = panel.style.maxWidth;
       const prevTransition = panel.style.transition;
 
       panel.style.transition = "width 0.25s cubic-bezier(0.16, 1, 0.3, 1), max-width 0.25s ease";
-      panel.style.width = "min(1080px, calc(100vw - 32px))";
-      panel.style.maxWidth = "calc(100vw - 32px)";
+      panel.style.setProperty("width", "min(1180px, calc(100vw - 32px))", "important");
+      panel.style.setProperty("max-width", "calc(100vw - 32px)", "important");
 
       return () => {
         panel.style.width = prevWidth;
@@ -405,6 +414,7 @@ function HeatmapInnerView() {
   return (
     <div
       data-dsh-heatmap="true"
+      ref={rootRef}
       style={{
         boxSizing: "border-box",
         width: "100%",
@@ -570,14 +580,14 @@ function HeatmapInnerView() {
           )}
         </div>
 
-        {/* Clean, centered SVG Calendar Grid (Fits panel smoothly) */}
+        {/* Clean, centered SVG Calendar Grid (Fits 1180px panel with zero scrollbars) */}
         {calendarGrid && (
           <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
             <svg
-              viewBox="0 0 770 120"
+              viewBox="0 0 880 136"
               style={{
                 width: "100%",
-                maxWidth: "770px",
+                maxWidth: "880px",
                 height: "auto",
                 display: "block",
                 overflow: "visible",
@@ -587,9 +597,9 @@ function HeatmapInnerView() {
               {monthHeaders.map((m, i) => (
                 <text
                   key={i}
-                  x={28 + m.col * 13.8}
-                  y={10}
-                  fontSize={10}
+                  x={32 + m.col * 15.6}
+                  y={11}
+                  fontSize={11}
                   fill="var(--dsw-alias-label-tertiary, #888888)"
                   fontFamily="inherit"
                 >
@@ -598,19 +608,19 @@ function HeatmapInnerView() {
               ))}
 
               {/* Day of week labels */}
-              <text x={2} y={39} fontSize={9} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
+              <text x={2} y={45} fontSize={10} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
                 Mon
               </text>
-              <text x={2} y={67} fontSize={9} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
+              <text x={2} y={76} fontSize={10} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
                 Wed
               </text>
-              <text x={2} y={95} fontSize={9} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
+              <text x={2} y={107} fontSize={10} fill="var(--dsw-alias-label-tertiary, #888888)" fontFamily="inherit">
                 Fri
               </text>
 
-              {/* Day Tiles: centered and proportioned */}
+              {/* Day Tiles: comfortable 12px with 15.6px step */}
               {calendarGrid.map((week, colIdx) => (
-                <g key={colIdx} transform={`translate(${28 + colIdx * 13.8}, 18)`}>
+                <g key={colIdx} transform={`translate(${32 + colIdx * 15.6}, 18)`}>
                   {week.map((day, rowIdx) => {
                     if (!day) return null;
 
@@ -628,17 +638,17 @@ function HeatmapInnerView() {
                       ? "rgba(255, 255, 255, 0.06)"
                       : "transparent";
 
-                    const strokeWidth = isSelected ? 1.6 : isHovered ? 1.3 : 1;
+                    const strokeWidth = isSelected ? 1.8 : isHovered ? 1.4 : 1;
 
                     return (
                       <rect
                         key={rowIdx}
                         x={0}
-                        y={rowIdx * 14}
-                        width={11}
-                        height={11}
-                        rx={2}
-                        ry={2}
+                        y={rowIdx * 15.6}
+                        width={12}
+                        height={12}
+                        rx={2.5}
+                        ry={2.5}
                         fill={bg}
                         stroke={strokeColor}
                         strokeWidth={strokeWidth}
@@ -676,7 +686,7 @@ function HeatmapInnerView() {
             <div
               style={{
                 width: "100%",
-                maxWidth: "770px",
+                maxWidth: "880px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
@@ -695,9 +705,9 @@ function HeatmapInnerView() {
                   <div
                     key={i}
                     style={{
-                      width: 11,
-                      height: 11,
-                      borderRadius: 2,
+                      width: 12,
+                      height: 12,
+                      borderRadius: 2.5,
                       backgroundColor: c,
                       border: i === 0 ? "1px solid rgba(255, 255, 255, 0.06)" : "none",
                       filter: i === 4 ? "drop-shadow(0 0 3px rgba(79, 133, 255, 0.5))" : "none",

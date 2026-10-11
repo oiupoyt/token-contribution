@@ -25,6 +25,22 @@ export function apply(ctx: any) {
 
   // 2. Global Modal Host & In-Session Token Meter Integration
   if (typeof document !== "undefined") {
+    // Inject dynamic resizing stylesheet for settings dialog
+    if (!document.getElementById("dsh-token-heatmap-panel-resize")) {
+      const resizeStyle = document.createElement("style");
+      resizeStyle.id = "dsh-token-heatmap-panel-resize";
+      resizeStyle.textContent = `
+        /* Dynamically widen DSH Settings panel when Token Heatmap is active */
+        .VOzbGW_panel:has([data-dsh-heatmap]),
+        [class*="_panel"]:has([data-dsh-heatmap]) {
+          width: min(1180px, calc(100vw - 32px)) !important;
+          max-width: calc(100vw - 32px) !important;
+          transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1), max-width 0.25s ease !important;
+        }
+      `;
+      document.head.appendChild(resizeStyle);
+    }
+
     const modalContainer = document.createElement("div");
     modalContainer.id = "dsh-token-heatmap-modal-root";
     document.body.appendChild(modalContainer);
