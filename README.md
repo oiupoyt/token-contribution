@@ -2,11 +2,6 @@
 
 > GitHub-style daily token usage heatmap, model analytics, and timeline trends for [DeepSeek Harness](https://github.com/deepseek-ai/dsh).
 
-<p align="center">
-  <img src="./assets/preview-overview.png" alt="Token Heatmap & Overview" width="49%" />
-  <img src="./assets/preview-trends.png" alt="Model Usage Breakdown & Trends" width="49%" />
-</p>
-
 ---
 
 ## Features
@@ -32,16 +27,23 @@ dsh plugin --profile web add dsh-token-heatmap
 
 *(To remove later: `dsh plugin --profile web remove dsh-token-heatmap`)*
 
----
-
 ### Manual Alternative (pnpm)
 
 ```bash
 cd ~/.dsh/profiles/web
 pnpm add dsh-token-heatmap
 ```
-
 Then add `"dsh-token-heatmap"` to `bundles` in `~/.dsh/profiles/web/package.json`.
+
+---
+
+## Preview
+
+<p align="center">
+  <img src="./assets/preview-overview.png" alt="Token Heatmap Overview" width="44%" />
+  &nbsp;
+  <img src="./assets/preview-trends.png" alt="Model Usage Breakdown & Trends" width="44%" />
+</p>
 
 ---
 
@@ -50,20 +52,6 @@ Then add `"dsh-token-heatmap"` to `bundles` in `~/.dsh/profiles/web/package.json
 1. Open the DeepSeek Harness Web GUI (`http://127.0.0.1:3080`).
 2. Go to **Settings** (gear icon at the bottom left) → **Token Heatmap**.
 3. Or during any session, click on the token stats pill at the bottom of the composer and tap **"View Token Usage Heatmap →"**.
-
----
-
-## Preview Screenshots
-
-### 1. Overview, Hero Total & Contribution Calendar
-<p align="center">
-  <img src="./assets/preview-overview.png" alt="DeepSeek Harness Token Heatmap Overview" width="85%" />
-</p>
-
-### 2. Model Breakdown & Timeline Trends
-<p align="center">
-  <img src="./assets/preview-trends.png" alt="DeepSeek Harness Model Analytics and Trends" width="85%" />
-</p>
 
 ---
 
