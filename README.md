@@ -3,8 +3,8 @@
 > GitHub-style daily token usage heatmap, model analytics, and timeline trends for [DeepSeek Harness](https://github.com/deepseek-ai/dsh).
 
 <p align="center">
-  <img src="./assets/preview-overview.jpg" alt="Token Heatmap & Overview" width="49%" />
-  <img src="./assets/preview-trends.jpg" alt="Model Usage Breakdown & Trends" width="49%" />
+  <img src="./assets/preview-overview.png" alt="Token Heatmap & Overview" width="49%" />
+  <img src="./assets/preview-trends.png" alt="Model Usage Breakdown & Trends" width="49%" />
 </p>
 
 ---
@@ -57,12 +57,12 @@ Then add `"dsh-token-heatmap"` to `bundles` in `~/.dsh/profiles/web/package.json
 
 ### 1. Overview, Hero Total & Contribution Calendar
 <p align="center">
-  <img src="./assets/preview-overview.jpg" alt="DeepSeek Harness Token Heatmap Overview" width="85%" />
+  <img src="./assets/preview-overview.png" alt="DeepSeek Harness Token Heatmap Overview" width="85%" />
 </p>
 
 ### 2. Model Breakdown & Timeline Trends
 <p align="center">
-  <img src="./assets/preview-trends.jpg" alt="DeepSeek Harness Model Analytics and Trends" width="85%" />
+  <img src="./assets/preview-trends.png" alt="DeepSeek Harness Model Analytics and Trends" width="85%" />
 </p>
 
 ---
