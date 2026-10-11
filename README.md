@@ -23,43 +23,25 @@ Visualizes your daily token consumption, prompt intensity, cache hit efficiency,
 
 ## Installation
 
-### Method 1: Using pnpm in your DSH Web profile
+## Installation
 
-Inside your DSH profile directory:
+Install with a single command via the official DSH CLI (automatically downloads, registers, and activates the bundle in your web profile):
+
+```bash
+dsh plugin --profile web add dsh-token-heatmap
+```
+
+*(To remove later: `dsh plugin --profile web remove dsh-token-heatmap`)*
+
+---
+
+### Manual Alternative (pnpm)
 
 ```bash
 cd ~/.dsh/profiles/web
-pnpm add dsh-plugin-token-heatmap
+pnpm add dsh-token-heatmap
 ```
-
-Then add `"dsh-plugin-token-heatmap"` to `~/.dsh/profiles/web/package.json` under `dsh.profile.bundles`:
-
-```json
-{
-  "dsh": {
-    "profile": {
-      "bundles": [
-        "@deepseek-ai/dsh-base",
-        "@deepseek-ai/dsh-web-app",
-        "dsh-plugin-token-heatmap"
-      ]
-    }
-  }
-}
-```
-
-### Method 2: Local Development Link
-
-Clone the repository locally:
-
-```bash
-git clone https://github.com/oiupoyt/dsh-plugin-token-heatmap.git ~/projects/dsh-plugin-token-heatmap
-cd ~/projects/dsh-plugin-token-heatmap
-npm run build
-
-cd ~/.dsh/profiles/web
-pnpm add --link ~/projects/dsh-plugin-token-heatmap
-```
+Then add `"dsh-token-heatmap"` to `bundles` in `~/.dsh/profiles/web/package.json`.
 
 ---
 
