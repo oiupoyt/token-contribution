@@ -78,19 +78,42 @@ interface CacheEntry {
 const fileCache = new Map<string, CacheEntry>();
 
 function findSessionFiles(dir: string): string[] {
-  const results: string[] = [];
-  try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        results.push(...findSessionFiles(fullPath));
-      } else if (entry.name.endsWith(".jsonl.zstd") || entry.name.endsWith(".jsonl")) {
-        results.push(fullPath);
+  // Group files by session directory. DSH keeps a migrated copy of each
+  // session (session.v3.jsonl.zstd alongside session.v4.jsonl.zstd) that
+  // contains the SAME records — reading both double-counts every turn.
+  // Prefer the newest schema version per directory.
+  const byDir = new Map<string, string[]>();
+  const collect = (d: string) => {
+    try {
+      const entries = fs.readdirSync(d, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(d, entry.name);
+        if (entry.isDirectory()) {
+          collect(fullPath);
+        } else if (entry.name.endsWith(".jsonl.zstd") || entry.name.endsWith(".jsonl")) {
+          if (!byDir.has(d)) byDir.set(d, []);
+          byDir.get(d)!.push(fullPath);
+        }
       }
+    } catch {
+      // Ignore unreadable dirs
     }
-  } catch {
-    // Ignore unreadable dirs
+  };
+  collect(dir);
+  const results: string[] = [];
+  for (const files of byDir.values()) {
+    if (files.length === 1) {
+      results.push(files[0]);
+      continue;
+    }
+    // Prefer highest session version (v4 > v3)
+    const ranked = files
+      .map((f) => {
+        const m = path.basename(f).match(/\.v(\d+)\.jsonl/);
+        return { f, v: m ? parseInt(m[1], 10) : 0 };
+      })
+      .sort((a, b) => b.v - a.v);
+    results.push(ranked[0].f);
   }
   return results;
 }
@@ -140,8 +163,12 @@ async function parseSessionFile(filePath: string): Promise<SessionSummary | null
         if (line.includes('"usage"')) {
           try {
             const obj = JSON.parse(line);
+            // Only assistant/message records carry real billed usage.
+            // compaction/summary records re-report the summarizer call and
+            // assistant/attempt lines carry no data.usage at all.
+            if (obj.type !== "assistant/message") return;
             const time = obj.time || (obj.data && obj.data.time);
-            const usage = obj.usage || (obj.data && obj.data.usage);
+            const usage = (obj.data && obj.data.usage) || obj.usage;
             if (time && usage) {
               const d = new Date(time);
               const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

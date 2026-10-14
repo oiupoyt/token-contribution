@@ -1,1 +1,5 @@
-node_modules/\n.DS_Store
+node_modules/
+.DS_Store
+
+# accuracy audit scripts (dev-only)
+audit/
