@@ -27,9 +27,9 @@ Then add `"token-contribution"` to `bundles` in `~/.dsh/profiles/web/package.jso
 ## Preview
 
 <p align="center">
-  <img src="./assets/preview-overview.png" alt="Token Heatmap Overview" width="44%" />
+  <img src="./assets/preview-overview.png?v=2" alt="Token Heatmap Overview" width="44%" />
   &nbsp;
-  <img src="./assets/preview-trends.png" alt="Model Usage Breakdown & Trends" width="44%" />
+  <img src="./assets/preview-trends.png?v=2" alt="Model Usage Breakdown & Trends" width="44%" />
 </p>
 
 ---
