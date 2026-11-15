@@ -1,5 +1,9 @@
+import { aggregateTokens, serializeResponse } from "./aggregator.js";
+
 export const name = "token-contribution";
 export const inject = ["webServer"];
+
+const PATHS = new Set(["/api/token-contribution", "/api/token-contribution/stats", "/api/dsh-token-heatmap/stats"]);
 
 export function apply(ctx: any) {
   ctx.effect(() =>
@@ -7,38 +11,24 @@ export function apply(ctx: any) {
       kind: "prefix",
       path: "/api/token-contribution",
       handler: async (req: any, res: any) => {
-        const url = new URL(req.url, "http://localhost");
-        const pathname = url.pathname.replace(/\/+$/, "");
-
-        res.setHeader("Access-Control-Allow-Origin", "*");
-        res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-        if (req.method === "OPTIONS") {
-          res.writeHead(204);
-          res.end();
+        const pathname = new URL(req.url, "http://localhost").pathname.replace(/\/+$/, "");
+        if (req.method !== "GET" || !PATHS.has(pathname)) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Not found" }));
           return;
         }
-
-        if (req.method === "GET" && (pathname === "/api/token-contribution" || pathname === "/api/token-contribution/stats" || pathname === "/api/dsh-token-heatmap/stats")) {
-          try {
-            const { aggregateTokens } = await import(`./aggregator.js?t=${Date.now()}`);
-            const data = await aggregateTokens();
-            res.writeHead(200, {
-              "Content-Type": "application/json; charset=utf-8",
-              "Cache-Control": "no-cache",
-            });
-            res.end(JSON.stringify(data));
-          } catch (err: any) {
-            res.writeHead(500, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: err?.message || "Failed to aggregate token stats" }));
-          }
-          return;
+        try {
+          // One aggregator for the life of the host: its cache is what makes
+          // repeat requests cheap. (0.1 re-imported the module per request,
+          // which discarded the cache and re-read every session every time.)
+          const data = await aggregateTokens();
+          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-cache" });
+          res.end(serializeResponse(data));
+        } catch (err: any) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err?.message || "Failed to aggregate token stats" }));
         }
-
-        res.writeHead(404, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Not found" }));
       },
-    })
+    }),
   );
 }

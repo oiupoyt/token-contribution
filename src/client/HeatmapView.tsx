@@ -1,71 +1,33 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 
-export interface DaySessionDetail {
-  sessionId: string;
-  sessionTitle: string;
-  createdAt: number;
-  totalTokens: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  turns: number;
-}
+import {
+  expandResponse,
+  type DayStats,
+  type HeatmapResponse,
+  type ModelUsage,
+  type ProviderUsage,
+  type Summary,
+  type TokenCounts,
+} from "../shared/types.js";
 
-export interface DayStats {
-  totalTokens: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
-  turns: number;
-  level?: number;
-  sessions?: DaySessionDetail[];
-}
+/** The token types shown everywhere, in display order, with chart colours. */
+const TOKEN_TYPES: { key: keyof TokenCounts; label: string; color: string }[] = [
+  { key: "inputTokens", label: "Input", color: "#4f85ff" },
+  { key: "outputTokens", label: "Output", color: "#22c55e" },
+  { key: "reasoningTokens", label: "Reasoning", color: "#a855f7" },
+  { key: "cacheReadTokens", label: "Cache read", color: "#8391ab" },
+  { key: "cacheWriteTokens", label: "Cache write", color: "#f59e0b" },
+];
 
-export interface ModelUsage {
-  model: string;
-  totalTokens: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  turns: number;
-  percentage: number;
-}
-
-export interface SessionSummary {
-  id: string;
-  title: string;
-  createdAt: number;
-  totalTokens: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  turns: number;
-  days: Record<string, DayStats>;
-  models?: Record<string, { totalTokens: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; turns: number }>;
-}
-
-export interface SummaryStats {
-  totalTokens: number;
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  totalCacheReadTokens: number;
-  totalTurns: number;
-  activeDays: number;
-  currentStreak: number;
-  longestStreak: number;
-  peakDay: { date: string; tokens: number; turns: number } | null;
-  dailyAverage: number;
-}
-
-export interface HeatmapResponse {
-  summary: SummaryStats;
-  days: Record<string, DayStats>;
-  sessions: SessionSummary[];
-  models?: ModelUsage[];
-  startDate: string;
-  endDate: string;
-}
+const EMPTY_COUNTS: TokenCounts = {
+  totalTokens: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+  reasoningTokens: 0,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
+  turns: 0,
+};
 
 function formatNumber(num: number): string {
   if (num >= 1_000_000_000) return (num / 1_000_000_000).toFixed(2) + "B";
@@ -76,6 +38,73 @@ function formatNumber(num: number): string {
 
 function formatExact(num: number): string {
   return num.toLocaleString();
+}
+
+/** The card surface every section of this view uses. */
+const CARD: React.CSSProperties = {
+  background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
+  border: "1px solid var(--dsw-alias-border-l2, #494949)",
+  borderRadius: 12,
+  padding: "18px 20px",
+  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
+};
+
+/** One compact line of the non-zero token types, under a model or provider bar. */
+function TypeLine({ counts }: { counts: TokenCounts }) {
+  const parts = TOKEN_TYPES.filter((t) => counts[t.key] > 0);
+  if (parts.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", marginTop: 5, fontSize: 11, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
+      {parts.map((t) => (
+        <span key={t.key} title={`${t.label}: ${formatExact(counts[t.key])}`} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: 2, background: t.color }} />
+          {t.label} {formatNumber(counts[t.key])}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * One tile per token type. Reasoning is shown on its own and never added to
+ * the total: some providers count it inside output and others (antigravity)
+ * report it separately, so summing it would double-count for the former.
+ */
+function TokenBreakdown({ counts, compact = false }: { counts: TokenCounts; compact?: boolean }) {
+  const shown = TOKEN_TYPES.filter((t) => !compact || counts[t.key] > 0);
+  if (shown.length === 0) return null;
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: compact ? "repeat(auto-fit, minmax(120px, 1fr))" : "repeat(auto-fit, minmax(150px, 1fr))",
+        gap: compact ? 8 : 12,
+      }}
+    >
+      {shown.map((t) => (
+        <div
+          key={t.key}
+          style={{
+            padding: compact ? "6px 10px" : "12px 14px",
+            background: "var(--dsw-alias-bg-layer-1, #1e1e1e)",
+            border: "1px solid var(--dsw-alias-border-l1, #3a3a3a)",
+            borderRadius: compact ? 6 : 10,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
+            <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 2, background: t.color, flexShrink: 0 }} />
+            {t.label}
+          </div>
+          <div
+            title={formatExact(counts[t.key])}
+            style={{ fontSize: compact ? 13 : 18, fontWeight: 700, marginTop: 4, color: "var(--dsw-alias-label-primary, #ffffff)", fontVariantNumeric: "tabular-nums" }}
+          >
+            {formatNumber(counts[t.key])}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -106,15 +135,10 @@ function HeatmapInnerView() {
   const [selectedSessionId, setSelectedSessionId] = useState<string>("all");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [chartRange, setChartRange] = useState<14 | 30 | 90>(30);
+  // Cache reads dwarf the other types, so each type can be charted on its own scale.
+  const [chartType, setChartType] = useState<"all" | keyof TokenCounts>("all");
   const [hoveredDay, setHoveredDay] = useState<{ date: string; stats: DayStats } | null>(null);
-  const [hoveredBar, setHoveredBar] = useState<{
-    date: string;
-    label: string;
-    totalTokens: number;
-    billedTokens: number;
-    cachedTokens: number;
-    turns: number;
-  } | null>(null);
+  const [hoveredBar, setHoveredBar] = useState<{ date: string; label: string; stats: TokenCounts; value: number } | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -155,7 +179,7 @@ function HeatmapInnerView() {
         return r.json();
       })
       .then((res) => {
-        setData(res);
+        setData(expandResponse(res));
         setLoading(false);
       })
       .catch((err) => {
@@ -176,7 +200,8 @@ function HeatmapInnerView() {
       return {
         summary: data.summary,
         days: data.days,
-        models: data.models || [],
+        models: data.models,
+        providers: data.providers,
         sessionTitle: "All Sessions (Global)",
       };
     }
@@ -186,16 +211,13 @@ function HeatmapInnerView() {
       return {
         summary: data.summary,
         days: data.days,
-        models: data.models || [],
+        models: data.models,
+        providers: data.providers,
         sessionTitle: "All Sessions (Global)",
       };
     }
 
-    let totalTokens = session.totalTokens;
-    let totalInputTokens = session.inputTokens;
-    let totalOutputTokens = session.outputTokens;
-    let totalCacheReadTokens = session.cacheReadTokens;
-    let totalTurns = session.turns;
+    const totalTokens = session.totalTokens;
     let activeDays = Object.values(session.days).filter((d) => d.totalTokens > 0).length;
     let dailyAverage = activeDays > 0 ? Math.round(totalTokens / activeDays) : 0;
     let peakDay: { date: string; tokens: number; turns: number } | null = null;
@@ -229,39 +251,47 @@ function HeatmapInnerView() {
       else if (stats.totalTokens <= q2) lvl = 2;
       else if (stats.totalTokens <= q3) lvl = 3;
       else lvl = 4;
-      leveledDays[date] = { ...stats, level: lvl };
+      leveledDays[date] = {
+        ...stats,
+        level: lvl,
+        sessions: [{ sessionId: session.id, sessionTitle: session.title, createdAt: session.createdAt, ...stats }],
+      };
     }
 
-    // Models for this session
-    const sessionModels: ModelUsage[] = session.models
-      ? Object.entries(session.models)
-          .map(([model, m]) => ({
-            model,
-            totalTokens: m.totalTokens,
-            inputTokens: m.inputTokens,
-            outputTokens: m.outputTokens,
-            cacheReadTokens: m.cacheReadTokens,
-            turns: m.turns,
-            percentage: totalTokens > 0 ? Math.round((m.totalTokens / totalTokens) * 1000) / 10 : 0,
-          }))
-          .sort((a, b) => b.totalTokens - a.totalTokens)
-      : [];
+    // Models and providers for this session
+    const pct = (t: number) => (totalTokens > 0 ? Math.round((t / totalTokens) * 1000) / 10 : 0);
+    const sessionModels: ModelUsage[] = Object.entries(session.models)
+      .map(([model, m]) => ({ model, ...m, percentage: pct(m.totalTokens) }))
+      .sort((a, b) => b.totalTokens - a.totalTokens);
+    const byProvider = new Map<string, TokenCounts>();
+    for (const m of sessionModels) {
+      const p = byProvider.get(m.provider) ?? { ...EMPTY_COUNTS };
+      for (const t of [...TOKEN_TYPES.map((x) => x.key), "totalTokens", "turns"] as (keyof TokenCounts)[]) p[t] += m[t];
+      byProvider.set(m.provider, p);
+    }
+    const sessionProviders: ProviderUsage[] = [...byProvider]
+      .map(([provider, p]) => ({ provider, ...p, percentage: pct(p.totalTokens) }))
+      .sort((a, b) => b.totalTokens - a.totalTokens);
 
+    const summary: Summary = {
+      totalTokens,
+      inputTokens: session.inputTokens,
+      outputTokens: session.outputTokens,
+      reasoningTokens: session.reasoningTokens,
+      cacheReadTokens: session.cacheReadTokens,
+      cacheWriteTokens: session.cacheWriteTokens,
+      turns: session.turns,
+      activeDays,
+      currentStreak: 0,
+      longestStreak: 0,
+      peakDay,
+      dailyAverage,
+    };
     return {
-      summary: {
-        totalTokens,
-        totalInputTokens,
-        totalOutputTokens,
-        totalCacheReadTokens,
-        totalTurns,
-        activeDays,
-        currentStreak: 0,
-        longestStreak: 0,
-        peakDay,
-        dailyAverage,
-      },
+      summary,
       days: leveledDays,
       models: sessionModels,
+      providers: sessionProviders,
       sessionTitle: session.title,
     };
   }, [data, selectedSessionId]);
@@ -282,15 +312,7 @@ function HeatmapInnerView() {
 
     while (current <= end || currentWeek.length > 0) {
       const dateKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}-${String(current.getDate()).padStart(2, "0")}`;
-      const dayStats = activeView.days[dateKey] || {
-        totalTokens: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-        cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-        turns: 0,
-        level: 0,
-      };
+      const dayStats = activeView.days[dateKey] || { ...EMPTY_COUNTS, level: 0, sessions: [] };
 
       if (current <= end) {
         currentWeek.push({ date: dateKey, stats: dayStats });
@@ -334,42 +356,27 @@ function HeatmapInnerView() {
   const chartData = useMemo(() => {
     if (!activeView) return [];
     const now = new Date();
-    const items: Array<{
-      date: string;
-      label: string;
-      totalTokens: number;
-      billedTokens: number;
-      cachedTokens: number;
-      turns: number;
-    }> = [];
+    const items: Array<{ date: string; label: string; stats: TokenCounts; value: number }> = [];
 
     for (let i = chartRange - 1; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      const stats = activeView.days[dateKey] || {
-        totalTokens: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-        cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-        turns: 0,
-      };
+      const stats = activeView.days[dateKey] || { ...EMPTY_COUNTS, level: 0, sessions: [] };
       items.push({
         date: dateKey,
         label: `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`,
-        totalTokens: stats.totalTokens,
-        billedTokens: stats.inputTokens + stats.outputTokens,
-        cachedTokens: stats.cacheReadTokens,
-        turns: stats.turns,
+        stats,
+        // Bar height: one type when a type is picked, otherwise every type stacked.
+        value: chartType === "all" ? TOKEN_TYPES.reduce((a, t) => a + stats[t.key], 0) : stats[chartType],
       });
     }
     return items;
-  }, [activeView, chartRange]);
+  }, [activeView, chartRange, chartType]);
 
   const maxChartTokens = useMemo(() => {
-    return Math.max(...chartData.map((d) => d.totalTokens), 1_000_000);
-  }, [chartData]);
+    return Math.max(...chartData.map((d) => d.value), chartType === "all" ? 1_000_000 : 1_000);
+  }, [chartData, chartType]);
 
   if (loading && !data) {
     return (
@@ -406,7 +413,7 @@ function HeatmapInnerView() {
   const { summary } = activeView;
   const cacheHitPercent =
     summary.totalTokens > 0
-      ? Math.round((summary.totalCacheReadTokens / summary.totalTokens) * 100)
+      ? Math.round((summary.cacheReadTokens / summary.totalTokens) * 100)
       : 0;
 
   const inspectedDayStats = selectedDate ? activeView.days[selectedDate] : null;
@@ -547,7 +554,7 @@ function HeatmapInnerView() {
           {formatExact(summary.totalTokens)}
         </div>
         <div style={{ fontSize: 13, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
-          <strong>{formatNumber(summary.totalTokens)}</strong> tokens across {summary.activeDays} active days ({summary.totalTurns} total requests)
+          <strong>{formatNumber(summary.totalTokens)}</strong> tokens across {summary.activeDays} active days ({summary.turns} total requests)
         </div>
       </div>
 
@@ -748,7 +755,7 @@ function HeatmapInnerView() {
             {cacheHitPercent}%
           </div>
           <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
-            {formatNumber(summary.totalCacheReadTokens)} cached reads
+            {formatNumber(summary.cacheReadTokens)} cached reads
           </div>
         </div>
 
@@ -766,10 +773,10 @@ function HeatmapInnerView() {
             {selectedSessionId === "all" ? "Daily Average" : "Total Steps"}
           </div>
           <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0 2px", color: "var(--dsw-alias-label-primary, #ffffff)" }}>
-            {selectedSessionId === "all" ? formatNumber(summary.dailyAverage) : summary.totalTurns}
+            {selectedSessionId === "all" ? formatNumber(summary.dailyAverage) : summary.turns}
           </div>
           <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
-            {selectedSessionId === "all" ? `Across ${summary.activeDays} active days` : `${formatNumber(summary.totalInputTokens + summary.totalOutputTokens)} billed`}
+            {selectedSessionId === "all" ? `Across ${summary.activeDays} active days` : `${formatNumber(summary.inputTokens + summary.outputTokens)} billed`}
           </div>
         </div>
 
@@ -816,6 +823,45 @@ function HeatmapInnerView() {
         </div>
       </div>
 
+      {/* Token types: every counter the providers report */}
+      <div style={{ ...CARD, marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 650, color: "var(--dsw-alias-label-primary, #ffffff)" }}>Token types</div>
+          <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
+            Total counts input, output and cache read. Reasoning is reported separately and not added.
+          </div>
+        </div>
+        <TokenBreakdown counts={summary} />
+      </div>
+
+      {/* Provider breakdown */}
+      {activeView.providers.length > 0 && (
+        <div style={{ ...CARD, marginBottom: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 650, color: "var(--dsw-alias-label-primary, #ffffff)" }}>Providers</div>
+            <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
+              {activeView.providers.length} provider{activeView.providers.length === 1 ? "" : "s"}
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {activeView.providers.map((p) => (
+              <div key={p.provider}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12, marginBottom: 5, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 600, color: "var(--dsw-alias-label-primary)" }}>{p.provider}</span>
+                  <span style={{ color: "var(--dsw-alias-label-secondary)" }}>
+                    <strong style={{ color: "#4f85ff" }}>{formatNumber(p.totalTokens)}</strong> ({p.percentage}%) · {p.turns} requests
+                  </span>
+                </div>
+                <div style={{ width: "100%", height: 6, background: "rgba(255, 255, 255, 0.06)", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ width: `${Math.max(1, p.percentage)}%`, height: "100%", background: "#336dfa", borderRadius: 3 }} />
+                </div>
+                <TypeLine counts={p} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Top Models Breakdown Section */}
       {activeView.models && activeView.models.length > 0 && (
         <div
@@ -857,6 +903,7 @@ function HeatmapInnerView() {
                 >
                   <span style={{ fontWeight: 600, color: "var(--dsw-alias-label-primary)" }}>
                     {m.model}
+                    <span style={{ fontWeight: 400, color: "var(--dsw-alias-label-secondary)", marginLeft: 6 }}>{m.provider}</span>
                   </span>
                   <span style={{ color: "var(--dsw-alias-label-secondary)" }}>
                     <strong style={{ color: "#4f85ff" }}>{formatNumber(m.totalTokens)}</strong> ({m.percentage}%) · {m.turns} requests
@@ -881,6 +928,7 @@ function HeatmapInnerView() {
                     }}
                   />
                 </div>
+                <TypeLine counts={m} />
               </div>
             ))}
           </div>
@@ -913,21 +961,40 @@ function HeatmapInnerView() {
               Token Usage Trends
             </div>
             <div style={{ fontSize: 11, color: "var(--dsw-alias-label-tertiary, #a0a0a0)", marginTop: 2 }}>
-              Daily billed vs cached token volume over time
+              {chartType === "all" ? "Daily tokens by type" : `Daily ${TOKEN_TYPES.find((t) => t.key === chartType)?.label.toLowerCase()} tokens`}
             </div>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-            {/* Legend: Billed vs Cached */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 11, color: "var(--dsw-alias-label-secondary)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ width: 8, height: 8, borderRadius: 2, background: "#4f85ff" }} />
-                <span>Billed Tokens</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ width: 8, height: 8, borderRadius: 2, background: "#253b82" }} />
-                <span>Cache Reads</span>
-              </div>
+            {/* Legend doubles as the type filter: cache reads dwarf the rest, so
+                picking one type redraws the chart on that type's own scale. */}
+            <div role="group" aria-label="Chart token type" style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", fontSize: 11 }}>
+              {[{ key: "all" as const, label: "All", color: "" }, ...TOKEN_TYPES].map((t) => {
+                const on = chartType === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setChartType(t.key)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      padding: "3px 8px",
+                      borderRadius: 6,
+                      border: `1px solid ${on ? "var(--dsw-alias-border-l2, #494949)" : "transparent"}`,
+                      background: on ? "var(--dsw-alias-bg-layer-1, #1e1e1e)" : "transparent",
+                      color: on ? "var(--dsw-alias-label-primary, #ffffff)" : "var(--dsw-alias-label-secondary, #b9b9b9)",
+                      fontSize: 11,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {t.color && <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 2, background: t.color }} />}
+                    {t.label}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Range Toggle: 14D | 30D | 90D */}
@@ -1003,10 +1070,19 @@ function HeatmapInnerView() {
                 const barWidth = Math.max(5, Math.min(22, totalBarWidth - 5));
                 const x = 50 + idx * totalBarWidth + (totalBarWidth - barWidth) / 2;
 
-                const totalH = (d.totalTokens / maxChartTokens) * 125;
-                const cachedH = d.totalTokens > 0 ? (d.cachedTokens / d.totalTokens) * totalH : 0;
-                const billedH = totalH - cachedH;
+                const totalH = (d.value / maxChartTokens) * 125;
                 const yBase = 145;
+                // Stack from the bottom in TOKEN_TYPES order (cache read last, on top).
+                const shown = chartType === "all" ? TOKEN_TYPES : TOKEN_TYPES.filter((t) => t.key === chartType);
+                let acc = 0;
+                const segments = shown
+                  .map((t) => {
+                    const h = d.value > 0 ? (d.stats[t.key] / d.value) * totalH : 0;
+                    const seg = { key: t.key, color: t.color, y: yBase - acc - h, h };
+                    acc += h;
+                    return seg;
+                  })
+                  .filter((seg) => seg.h > 0);
 
                 const isHovered = hoveredBar?.date === d.date;
 
@@ -1036,42 +1112,21 @@ function HeatmapInnerView() {
                     />
 
                     {/* Empty/Zero line marker if 0 tokens */}
-                    {d.totalTokens === 0 ? (
-                      <rect
-                        x={x}
-                        y={yBase - 2}
-                        width={barWidth}
-                        height={2}
-                        fill="rgba(255, 255, 255, 0.08)"
-                        rx={1}
-                      />
+                    {d.value === 0 ? (
+                      <rect x={x} y={yBase - 2} width={barWidth} height={2} fill="rgba(255, 255, 255, 0.08)" rx={1} />
                     ) : (
-                      <g>
-                        {/* Cached segment (bottom) */}
-                        {cachedH > 0 && (
+                      <g style={{ filter: isHovered ? "drop-shadow(0 0 5px rgba(79, 133, 255, 0.8))" : "none" }}>
+                        {segments.map((seg, i) => (
                           <rect
+                            key={seg.key}
                             x={x}
-                            y={yBase - cachedH}
+                            y={seg.y}
                             width={barWidth}
-                            height={cachedH}
-                            fill="#253b82"
-                            rx={billedH <= 0 ? 2 : 0}
+                            height={Math.max(seg.h, 0.5)}
+                            fill={seg.color}
+                            rx={i === segments.length - 1 ? 2 : 0}
                           />
-                        )}
-                        {/* Billed segment (top) */}
-                        {billedH > 0 && (
-                          <rect
-                            x={x}
-                            y={yBase - totalH}
-                            width={barWidth}
-                            height={billedH}
-                            fill={isHovered ? "#60a5fa" : "#4f85ff"}
-                            rx={2}
-                            style={{
-                              filter: isHovered ? "drop-shadow(0 0 5px rgba(79, 133, 255, 0.8))" : "none",
-                            }}
-                          />
-                        )}
+                        ))}
                       </g>
                     )}
 
@@ -1160,28 +1215,8 @@ function HeatmapInnerView() {
 
           {/* Breakdown Pills for the day */}
           {inspectedDayStats && inspectedDayStats.totalTokens > 0 && (
-            <div
-              style={{
-                display: "flex",
-                gap: 12,
-                flexWrap: "wrap",
-                marginBottom: 16,
-                fontSize: 12,
-              }}
-            >
-              <div style={{ padding: "6px 12px", background: "var(--dsw-alias-bg-layer-1, #1e1e1e)", borderRadius: 6, border: "1px solid var(--dsw-alias-border-l1)" }}>
-                <span style={{ color: "var(--dsw-alias-label-tertiary)" }}>Billed Input: </span>
-                <strong>{formatNumber(inspectedDayStats.inputTokens)}</strong>
-              </div>
-              <div style={{ padding: "6px 12px", background: "var(--dsw-alias-bg-layer-1, #1e1e1e)", borderRadius: 6, border: "1px solid var(--dsw-alias-border-l1)" }}>
-                <span style={{ color: "var(--dsw-alias-label-tertiary)" }}>Output Generated: </span>
-                <strong>{formatNumber(inspectedDayStats.outputTokens)}</strong>
-              </div>
-              <div style={{ padding: "6px 12px", background: "var(--dsw-alias-bg-layer-1, #1e1e1e)", borderRadius: 6, border: "1px solid var(--dsw-alias-border-l1)" }}>
-                <span style={{ color: "var(--dsw-alias-label-tertiary)" }}>Cache Reads: </span>
-                <strong>{formatNumber(inspectedDayStats.cacheReadTokens)}</strong> (
-                {Math.round((inspectedDayStats.cacheReadTokens / inspectedDayStats.totalTokens) * 100)}%)
-              </div>
+            <div style={{ marginBottom: 16 }}>
+              <TokenBreakdown counts={inspectedDayStats} compact />
             </div>
           )}
 
@@ -1213,6 +1248,7 @@ function HeatmapInnerView() {
                       <div style={{ fontSize: 11, color: "var(--dsw-alias-label-tertiary, #a0a0a0)", marginTop: 2 }}>
                         Started {new Date(sess.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ID: {sess.sessionId.slice(0, 10)}
                       </div>
+                      <TypeLine counts={sess} />
                     </div>
 
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -1309,18 +1345,16 @@ function HeatmapInnerView() {
               day: "numeric",
             })}
           </div>
-          {hoveredBar.totalTokens === 0 ? (
+          {hoveredBar.stats.totalTokens === 0 ? (
             <div style={{ color: "var(--dsw-alias-label-tertiary)" }}>No activity recorded</div>
           ) : (
             <div>
               <div style={{ color: "#4f85ff", fontWeight: 600 }}>
-                {formatExact(hoveredBar.totalTokens)} total tokens
+                {formatExact(hoveredBar.stats.totalTokens)} total tokens
               </div>
-              <div style={{ fontSize: 11, color: "var(--dsw-alias-label-secondary)", marginTop: 2 }}>
-                Billed: {formatNumber(hoveredBar.billedTokens)} · Cached: {formatNumber(hoveredBar.cachedTokens)}
-              </div>
+              <TypeLine counts={hoveredBar.stats} />
               <div style={{ fontSize: 10, color: "var(--dsw-alias-label-tertiary)", marginTop: 4 }}>
-                {hoveredBar.turns} turns · Click to inspect day
+                {hoveredBar.stats.turns} turns · Click to inspect day
               </div>
             </div>
           )}

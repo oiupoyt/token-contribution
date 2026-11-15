@@ -38,20 +38,31 @@ Then add `"token-contribution"` to `bundles` in `~/.dsh/profiles/web/package.jso
 
 - **52-Week GitHub Contribution Calendar:** 7 rows × 52 columns tracking daily token activity with a smooth monochromatic gradient anchored on DeepSeek's official brand blue (`#3964FE`).
 - **Interactive Day Inspector:** Click on any day to slide open an inspection drawer showing every session active on that date, exact timestamps, and token breakdown.
-- **Top Model Usage Breakdown:** Real-time distribution showing tokens, percentages, and request steps for every model used across sessions.
-- **Token Usage Trends Timeline:** Stacked bar chart comparing daily Billed Tokens vs. Cache Reads, with **14D / 30D / 90D** range filters and hover tooltips.
+- **Token types:** input, output, reasoning, cache read and cache write, shown for the whole history, each day, each session, each model and each provider. The headline total is input + output + cache read; reasoning is shown on its own because some providers count it inside output and others report it separately.
+- **Provider breakdown:** usage grouped by provider (antigravity, claude, openrouter, …) alongside the per-model list.
+- **Top Model Usage Breakdown:** tokens, share and requests for every model, with its provider and a per-type line.
+- **Token Usage Trends Timeline:** daily bars stacked by token type, with **14D / 30D / 90D** ranges. Pick one type in the legend to chart it on its own scale (cache reads dwarf everything else).
 - **Global & Per-Session Filtering:** Toggle between aggregate global history or inspect token activity for individual sessions.
 - **Auto-Expanding Panel:** Smoothly widens the DSH Settings dialog to 1180px so the calendar and charts fit cleanly with zero scrollbars.
 - **Session Token Meter Integration:** Injects a clean action button into the in-session token usage dialog to open the heatmap directly from active sessions.
-- **High-Performance Parser:** Recursively aggregates local `.jsonl.zstd` logs with timestamp and mtime caching for instant loading.
+- **Fast loading:** the first read of your session history streams every file through `zstd` (about 2.5 to 5 s for 200 MB of sessions, under 200 MB of memory). Results are cached in `~/.dsh/cache/token-contribution/sessions.json`, so later loads take about 20 ms, including after DSH restarts. A session that grows is read from where the last read stopped, not from the start.
 
 ---
 
 ## Usage
 
 1. Open the DeepSeek Harness Web GUI (`http://127.0.0.1:3080`).
-2. Go to **Settings** (gear icon at the bottom left) → **Token Heatmap**.
-3. Or during any session, click on the token stats pill at the bottom of the composer and tap **"View Token Usage Heatmap →"**.
+2. Open the account menu (bottom left) → **Settings** → **Token Contribution**.
+3. Or during any session, click the token stats pill at the bottom of the composer and choose **View Token Contribution →**.
+
+Requires Node 22.15+ (built-in zstd) and the `zstd` command for the fastest first load; without the command, files are decoded in-process.
+
+## Development
+
+```bash
+npm test        # builds lib/, then runs the aggregator tests
+npm run build   # bundles the host half (lib/index.js) and browser half (lib/client.js)
+```
 
 ---
 

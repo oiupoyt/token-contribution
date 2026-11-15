@@ -1,7 +1,7 @@
 {
   "name": "token-contribution",
-  "version": "0.1.1",
-  "description": "GitHub-style token usage contribution calendar and analytics for DeepSeek Harness",
+  "version": "0.2.0",
+  "description": "GitHub-style token usage calendar with per-type, per-model and per-provider breakdowns for DeepSeek Harness",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
@@ -37,7 +37,8 @@
     }
   },
   "scripts": {
-    "build": "node scripts/build.mjs"
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/build.mjs && node --experimental-strip-types --no-warnings --test --test-concurrency=1 test/*.test.ts"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
