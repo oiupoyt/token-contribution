@@ -37,6 +37,10 @@ export function apply(ctx: any) {
           max-width: calc(100vw - 32px) !important;
           transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1), max-width 0.25s ease !important;
         }
+        .tc-select:focus-visible {
+          outline: 2px solid #4f85ff;
+          outline-offset: 2px;
+        }
       `;
       document.head.appendChild(resizeStyle);
     }

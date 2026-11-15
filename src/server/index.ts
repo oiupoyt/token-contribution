@@ -11,7 +11,8 @@ export function apply(ctx: any) {
       kind: "prefix",
       path: "/api/token-contribution",
       handler: async (req: any, res: any) => {
-        const pathname = new URL(req.url, "http://localhost").pathname.replace(/\/+$/, "");
+        const url = new URL(req.url, "http://localhost");
+        const pathname = url.pathname.replace(/\/+$/, "");
         if (req.method !== "GET" || !PATHS.has(pathname)) {
           res.writeHead(404, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "Not found" }));
@@ -21,7 +22,7 @@ export function apply(ctx: any) {
           // One aggregator for the life of the host: its cache is what makes
           // repeat requests cheap. (0.1 re-imported the module per request,
           // which discarded the cache and re-read every session every time.)
-          const data = await aggregateTokens();
+          const data = await aggregateTokens(undefined, { range: url.searchParams.get("range") ?? undefined });
           res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-cache" });
           res.end(serializeResponse(data));
         } catch (err: any) {

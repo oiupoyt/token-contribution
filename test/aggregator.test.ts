@@ -157,6 +157,53 @@ test("a partial trailing frame larger than 1 MB is not treated as complete", asy
   assert.equal(r.summary.inputTokens, 606, "the record after the large frame was lost");
 });
 
+test("a time range keeps only usage inside it, across every breakdown", async () => {
+  const root = mkdtempSync(join(tmpdir(), "tc-"));
+  const now = Date.parse("2026-11-15T12:00:00");
+  const iso = (msAgo: number) => new Date(now - msAgo).toISOString();
+  const H = 3_600_000;
+  writeSession(root, "r", [
+    rec({ type: "session", id: "r", createdAt: now - 40 * 24 * H }),
+    msg(iso(30 * 60_000), { inputTokens: 1 }, "m1", "p1"), // 30 min ago
+    msg(iso(5 * H), { inputTokens: 10 }, "m2", "p2"), // 5 h ago
+    msg(iso(3 * 24 * H), { inputTokens: 100 }, "m1", "p1"), // 3 days ago
+    msg(iso(20 * 24 * H), { inputTokens: 1000 }, "m3", "p3"), // 20 days ago
+  ]);
+  writeSession(root, "old", [
+    rec({ type: "session", id: "old", createdAt: now - 60 * 24 * H }),
+    msg(iso(60 * 24 * H), { inputTokens: 10000, outputTokens: 1 }, "m4", "p4"),
+  ]);
+  const agg = createAggregator();
+  const at = (range: string) => agg.aggregate(root, { range, now });
+
+  const hour = await at("1h");
+  assert.equal(hour.summary.inputTokens, 1);
+  assert.deepEqual(hour.models.map((m) => m.model), ["m1"]);
+  assert.deepEqual(hour.providers.map((p) => p.provider), ["p1"]);
+  assert.deepEqual(hour.sessions.map((s) => s.id), ["r"]);
+  assert.equal(hour.sessions[0].inputTokens, 1, "session totals must follow the range");
+
+  assert.equal((await at("24h")).summary.inputTokens, 11);
+  assert.equal((await at("7d")).summary.inputTokens, 111);
+  assert.equal((await at("30d")).summary.inputTokens, 1111);
+  const all = await at("all");
+  assert.equal(all.summary.inputTokens, 11111);
+  assert.equal(all.sessions.length, 2);
+  assert.equal(all.range, "all");
+
+  // Day buckets stay exact: the 3-days-ago request lands on its own date.
+  const week = await at("7d");
+  const day = new Date(now - 3 * 24 * H);
+  const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+  assert.equal(week.days[key].inputTokens, 100);
+});
+
+test("an unknown range is treated as all time", async () => {
+  const r = await createAggregator().aggregate(fixture(), { range: "bogus" });
+  assert.equal(r.summary.inputTokens, 601);
+  assert.equal(r.range, "all");
+});
+
 test("a cache from another format version is ignored", async () => {
   const root = fixture();
   const cacheFile = join(mkdtempSync(join(tmpdir(), "tc-cache-")), "cache.json");
@@ -232,8 +279,10 @@ test("the response for the real sessions stays under 320 KB", { skip: !existsSyn
   const wire = serializeResponse(r);
   const kb = wire.length / 1024;
   assert.ok(kb < 320, `response is ${kb.toFixed(0)} KB`);
-  // Lossless: the client gets back exactly what the server computed.
-  assert.deepEqual(expandResponse(JSON.parse(wire)), JSON.parse(JSON.stringify(r)));
+  // Lossless for everything the client uses: the server-only per-day and
+  // per-hour model buckets are the one thing deliberately left off the wire.
+  const expected = JSON.parse(JSON.stringify({ ...r, sessions: r.sessions.map(({ recent, dayModels, ...s }) => s) }));
+  assert.deepEqual(expandResponse(JSON.parse(wire)), expected);
 });
 
 test("parsing the real sessions keeps memory bounded", { skip: !existsSync(TRUTH) }, async () => {

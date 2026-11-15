@@ -3,7 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import zlib from "node:zlib";
 import { execFileSync, spawn } from "node:child_process";
-import type { DayStats, HeatmapResponse, ModelUsage, ProviderUsage, SessionSummary, Summary, TokenCounts } from "../shared/types.ts";
+import { RANGES, type DayStats, type HeatmapResponse, type ModelUsage, type ProviderUsage, type RangeId, type SessionSummary, type Summary, type TokenCounts } from "../shared/types.ts";
 
 export * from "../shared/types.ts";
 
@@ -258,9 +258,15 @@ export function parseInto(into: SessionSummary, buf: Buffer) {
         cacheWriteTokens: Number(usage.cacheWriteTokens) || 0,
         turns: 1,
       };
-      addInto((into.days[dateKey(new Date(time))] ??= zero()), row);
+      const day = dateKey(new Date(time));
+      addInto((into.days[day] ??= zero()), row);
       addInto((into.models[model] ??= { ...zero(), provider }), row);
+      addInto(((into.dayModels ??= {})[day] ??= {})[model] ??= { ...zero(), provider }, row);
       addInto(into, row);
+      // Hour buckets for the sub-day ranges; pruned to RECENT_MS on read.
+      const hour = String(time - (time % 3_600_000));
+      const bucket = ((into.recent ??= {})[hour] ??= {});
+      addInto((bucket[model] ??= { ...zero(), provider }), row);
       continue;
     }
 
@@ -317,7 +323,10 @@ function findSessionFiles(root: string): string[] {
 const CONCURRENCY = Math.max(1, Math.min(4, os.cpus().length - 1));
 
 /** Bump when the cached session shape or parsing rules change. */
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
+
+/** Hour buckets older than this are dropped; day buckets cover longer ranges. */
+const RECENT_MS = 2 * 86_400_000;
 
 interface CacheEntry {
   size: number;
@@ -328,9 +337,15 @@ interface CacheEntry {
 }
 
 export interface Aggregator {
-  aggregate(root?: string): Promise<HeatmapResponse>;
+  aggregate(root?: string, query?: Query): Promise<HeatmapResponse>;
   flush(): Promise<void>;
   stats(): { parsed: number; appended: number; cached: number };
+}
+
+export interface Query {
+  range?: string;
+  /** Clock override for tests. */
+  now?: number;
 }
 
 export interface AggregatorOptions {
@@ -413,6 +428,7 @@ export function createAggregator(options: AggregatorOptions = {}): Aggregator {
       });
       if (grew) appended++;
       else parsed++;
+      pruneRecent(session, Date.now());
       cache.set(file, { size: stat.size, mtimeMs: stat.mtimeMs, end, session });
       schedulePersist();
       return session;
@@ -423,10 +439,12 @@ export function createAggregator(options: AggregatorOptions = {}): Aggregator {
   };
 
   // Concurrent requests (the page and the in-session meter) share one pass.
-  let inFlight: Promise<HeatmapResponse> | undefined;
+  let inFlight: Promise<SessionSummary[]> | undefined;
 
   return {
-    aggregate(root = path.join(os.homedir(), ".dsh", "sessions")) {
+    async aggregate(root = path.join(os.homedir(), ".dsh", "sessions"), query: Query = {}) {
+      // Reading the files is shared by concurrent requests; the range cut is
+      // cheap and done per request on the cached sessions.
       inFlight ??= (async () => {
         try {
           const files = findSessionFiles(root);
@@ -442,13 +460,18 @@ export function createAggregator(options: AggregatorOptions = {}): Aggregator {
               }
             }),
           );
-          const sessions = loaded.filter((s): s is SessionSummary => s !== null);
-          return summarize(sessions.map((s) => ({ ...s, title: s.title || `Session ${s.id.slice(0, 8)}` })));
+          return loaded.filter((s): s is SessionSummary => s !== null);
         } finally {
           inFlight = undefined;
         }
       })();
-      return inFlight;
+      const sessions = await inFlight;
+      const range = (RANGES.find((r) => r.id === query.range)?.id ?? "all") as RangeId;
+      const cut = sessions
+        .map((s) => restrictToRange(s, range, query.now ?? Date.now()))
+        .filter((s): s is SessionSummary => s !== null)
+        .map((s) => ({ ...s, title: s.title || `Session ${s.id.slice(0, 8)}` }));
+      return { ...summarize(cut), range };
     },
     async flush() {
       if (writeTimer !== undefined) {
@@ -474,7 +497,56 @@ function loadCache(file: string | undefined): Map<string, CacheEntry> {
   return cache;
 }
 
-function summarize(sessions: SessionSummary[]): HeatmapResponse {
+/** Drops hour buckets older than RECENT_MS; they only serve sub-day ranges. */
+function pruneRecent(s: SessionSummary, now: number) {
+  if (!s.recent) return;
+  const oldest = now - RECENT_MS;
+  for (const hour of Object.keys(s.recent)) if (Number(hour) + 3_600_000 < oldest) delete s.recent[hour];
+}
+
+/**
+ * A session's usage limited to `range` ending at `now`, or null when it has
+ * none in that window.
+ *
+ * Ranges of a day or more cut on local calendar days ("last 7 days" is today
+ * and the six days before it), which is what the calendar and chart show.
+ * Shorter ranges cut on clock hours from the hourly buckets.
+ */
+export function restrictToRange(s: SessionSummary, range: RangeId, now: number): SessionSummary | null {
+  const spec = RANGES.find((r) => r.id === range)!;
+  if (spec.ms === 0) return s;
+  const out: SessionSummary = { ...s, ...zero(), days: {}, models: {} };
+  if (spec.ms < 86_400_000) {
+    const from = now - spec.ms;
+    for (const [hour, models] of Object.entries(s.recent ?? {})) {
+      const t = Number(hour);
+      // An hour bucket counts when any part of it falls in the window.
+      if (t + 3_600_000 <= from || t > now) continue;
+      for (const [model, m] of Object.entries(models)) {
+        addInto((out.models[model] ??= { ...zero(), provider: m.provider }), m);
+        addInto((out.days[dateKey(new Date(t))] ??= zero()), m);
+        addInto(out, m);
+      }
+    }
+  } else {
+    const days = Math.round(spec.ms / 86_400_000);
+    const first = new Date(now);
+    first.setHours(0, 0, 0, 0);
+    first.setDate(first.getDate() - (days - 1));
+    const fromKey = dateKey(first);
+    for (const [day, d] of Object.entries(s.days)) {
+      if (day < fromKey) continue;
+      addInto((out.days[day] = zero()), d);
+      addInto(out, d);
+      for (const [model, m] of Object.entries(s.dayModels?.[day] ?? {})) {
+        addInto((out.models[model] ??= { ...zero(), provider: m.provider }), m);
+      }
+    }
+  }
+  return out.turns > 0 ? out : null;
+}
+
+function summarize(sessions: SessionSummary[]): Omit<HeatmapResponse, "range"> {
   sessions.sort((a, b) => b.createdAt - a.createdAt);
 
   const days: Record<string, DayStats> = {};
@@ -564,9 +636,9 @@ function summarize(sessions: SessionSummary[]): HeatmapResponse {
 
 /** Process-wide aggregator, so the cache survives across requests. */
 let shared: Aggregator | undefined;
-export function aggregateTokens(root?: string): Promise<HeatmapResponse> {
+export function aggregateTokens(root?: string, query?: Query): Promise<HeatmapResponse> {
   shared ??= createAggregator({
     cacheFile: path.join(process.env.DSH_HOME ?? path.join(os.homedir(), ".dsh"), "cache", "token-contribution", "sessions.json"),
   });
-  return shared.aggregate(root);
+  return shared.aggregate(root, query);
 }

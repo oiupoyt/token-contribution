@@ -41,7 +41,29 @@ export interface SessionSummary extends TokenCounts {
   createdAt: number;
   days: Record<string, TokenCounts>;
   models: Record<string, TokenCounts & { provider: string }>;
+  /**
+   * Usage per day and model, so a date range can be cut exactly per model.
+   * Server-side only; never sent.
+   */
+  dayModels?: Record<string, Record<string, TokenCounts & { provider: string }>>;
+  /**
+   * Usage per clock hour (key: epoch ms of the hour start) and model, kept
+   * for the most recent days only, for the sub-day ranges. Server-side only.
+   */
+  recent?: Record<string, Record<string, TokenCounts & { provider: string }>>;
 }
+
+/** Time ranges the view offers; `all` is the whole history. */
+export const RANGES = [
+  { id: "1h", label: "Last hour", ms: 3_600_000 },
+  { id: "24h", label: "Last 24 hours", ms: 86_400_000 },
+  { id: "7d", label: "Last 7 days", ms: 7 * 86_400_000 },
+  { id: "30d", label: "Last 30 days", ms: 30 * 86_400_000 },
+  { id: "90d", label: "Last 90 days", ms: 90 * 86_400_000 },
+  { id: "365d", label: "Last year", ms: 365 * 86_400_000 },
+  { id: "all", label: "All time", ms: 0 },
+] as const;
+export type RangeId = (typeof RANGES)[number]["id"];
 
 export interface Summary extends TokenCounts {
   activeDays: number;
@@ -59,6 +81,8 @@ export interface HeatmapResponse {
   providers: ProviderUsage[];
   startDate: string;
   endDate: string;
+  /** The range this response covers. */
+  range: RangeId;
 }
 
 /**
@@ -69,10 +93,11 @@ export interface HeatmapResponse {
  */
 export function serializeResponse(r: HeatmapResponse): string {
   const days: Record<string, unknown> = {};
+  const sessions = r.sessions.map(({ recent, dayModels, ...rest }) => rest);
   for (const [date, d] of Object.entries(r.days)) {
     days[date] = { ...d, sessions: d.sessions.map(({ sessionTitle, createdAt, ...rest }) => rest) };
   }
-  return JSON.stringify({ ...r, days }, (_k, v) => (v === 0 ? undefined : v));
+  return JSON.stringify({ ...r, sessions, days }, (_k, v) => (v === 0 ? undefined : v));
 }
 
 const COUNT_KEYS: (keyof TokenCounts)[] = [
@@ -113,5 +138,6 @@ export function expandResponse(raw: any): HeatmapResponse {
   raw.sessions = sessions;
   raw.providers ??= [];
   raw.models ??= [];
+  raw.range ??= "all";
   return raw as HeatmapResponse;
 }

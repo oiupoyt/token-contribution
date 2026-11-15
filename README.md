@@ -42,7 +42,7 @@ Then add `"token-contribution"` to `bundles` in `~/.dsh/profiles/web/package.jso
 - **Provider breakdown:** usage grouped by provider (antigravity, claude, openrouter, …) alongside the per-model list.
 - **Top Model Usage Breakdown:** tokens, share and requests for every model, with its provider and a per-type line.
 - **Token Usage Trends Timeline:** daily bars stacked by token type, with **14D / 30D / 90D** ranges. Pick one type in the legend to chart it on its own scale (cache reads dwarf everything else).
-- **Global & Per-Session Filtering:** Toggle between aggregate global history or inspect token activity for individual sessions.
+- **Time and session filters:** limit everything to the last hour, 24 hours, 7, 30 or 90 days, last year, or all time, and/or one session. The time choice is remembered. Ranges of a day or more follow calendar days, like the chart; the last hour and 24 hours follow clock hours.
 - **Auto-Expanding Panel:** Smoothly widens the DSH Settings dialog to 1180px so the calendar and charts fit cleanly with zero scrollbars.
 - **Session Token Meter Integration:** Injects a clean action button into the in-session token usage dialog to open the heatmap directly from active sessions.
 - **Fast loading:** the first read of your session history streams every file through `zstd` (about 2.5 to 5 s for 200 MB of sessions, under 200 MB of memory). Results are cached in `~/.dsh/cache/token-contribution/sessions.json`, so later loads take about 20 ms, including after DSH restarts. A session that grows is read from where the last read stopped, not from the start.

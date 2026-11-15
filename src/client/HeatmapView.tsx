@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 
 import {
+  RANGES,
   expandResponse,
+  type RangeId,
   type DayStats,
   type HeatmapResponse,
   type ModelUsage,
@@ -39,6 +41,19 @@ function formatNumber(num: number): string {
 function formatExact(num: number): string {
   return num.toLocaleString();
 }
+
+const RANGE_KEY = "token-contribution:range";
+
+/** Header dropdowns. The focus ring comes from `.tc-select:focus-visible`. */
+const SELECT: React.CSSProperties = {
+  background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
+  border: "1px solid var(--dsw-alias-border-l2, #494949)",
+  color: "var(--dsw-alias-label-primary, #eeeeee)",
+  borderRadius: 8,
+  padding: "6px 12px",
+  fontSize: 12,
+  cursor: "pointer",
+};
 
 /** The card surface every section of this view uses. */
 const CARD: React.CSSProperties = {
@@ -133,6 +148,10 @@ function HeatmapInnerView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("all");
+  const [range, setRange] = useState<RangeId>(() => {
+    const saved = typeof localStorage !== "undefined" ? localStorage.getItem(RANGE_KEY) : null;
+    return (RANGES.find((r) => r.id === saved)?.id ?? "all") as RangeId;
+  });
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [chartRange, setChartRange] = useState<14 | 30 | 90>(30);
   // Cache reads dwarf the other types, so each type can be charted on its own scale.
@@ -171,18 +190,25 @@ function HeatmapInnerView() {
     }
   }, []);
 
+  // Responses can arrive out of order when the range changes quickly; only
+  // the latest request may update the view.
+  const requestSeq = useRef(0);
   const fetchStats = () => {
+    const seq = ++requestSeq.current;
     setLoading(true);
-    fetch("/api/token-contribution/stats")
+    setError(null);
+    fetch(`/api/token-contribution/stats?range=${encodeURIComponent(range)}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP error ${r.status}`);
         return r.json();
       })
       .then((res) => {
+        if (seq !== requestSeq.current) return;
         setData(expandResponse(res));
         setLoading(false);
       })
       .catch((err) => {
+        if (seq !== requestSeq.current) return;
         setError(err.message);
         setLoading(false);
       });
@@ -190,7 +216,20 @@ function HeatmapInnerView() {
 
   useEffect(() => {
     fetchStats();
-  }, []);
+    try {
+      localStorage.setItem(RANGE_KEY, range);
+    } catch {
+      // storage unavailable (private mode): the choice lasts for this view only
+    }
+  }, [range]);
+
+  // A session outside the new range has no data; fall back to all sessions.
+  useEffect(() => {
+    if (data && selectedSessionId !== "all" && !data.sessions.some((s) => s.id === selectedSessionId)) {
+      setSelectedSessionId("all");
+      setSelectedDate(null);
+    }
+  }, [data]);
 
   // Compute active days & stats based on session filter
   const activeView = useMemo(() => {
@@ -467,7 +506,7 @@ function HeatmapInnerView() {
                 border: "1px solid rgba(51, 109, 250, 0.35)",
               }}
             >
-              52 Weeks
+              {RANGES.find((r) => r.id === range)?.label ?? "All time"}
             </span>
           </h2>
           <p
@@ -481,28 +520,31 @@ function HeatmapInnerView() {
           </p>
         </div>
 
-        {/* Right side controls: Session selector & Refresh */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {/* Right side controls: time range, session, refresh */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }} aria-busy={loading}>
+          {/* Time range */}
+          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "var(--dsw-alias-label-tertiary)" }}>Time:</span>
+            <select className="tc-select" value={range} onChange={(e) => setRange(e.target.value as RangeId)} style={SELECT}>
+              {RANGES.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
           {/* Session Filter Dropdown */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontSize: 12, color: "var(--dsw-alias-label-tertiary)" }}>Session:</span>
             <select
+              className="tc-select"
               value={selectedSessionId}
               onChange={(e) => {
                 setSelectedSessionId(e.target.value);
                 setSelectedDate(null);
               }}
-              style={{
-                background: "var(--dsw-alias-bg-layer-2, #2c2c2c)",
-                border: "1px solid var(--dsw-alias-border-l2, #494949)",
-                color: "var(--dsw-alias-label-primary, #eeeeee)",
-                borderRadius: 8,
-                padding: "6px 12px",
-                fontSize: 12,
-                outline: "none",
-                cursor: "pointer",
-                maxWidth: 240,
-              }}
+              style={{ ...SELECT, maxWidth: 240 }}
             >
               <option value="all">All Sessions ({(data.sessions || []).length} total)</option>
               {(data.sessions || []).map((s) => (
@@ -511,7 +553,7 @@ function HeatmapInnerView() {
                 </option>
               ))}
             </select>
-          </div>
+          </label>
 
           <button
             onClick={fetchStats}
@@ -530,10 +572,23 @@ function HeatmapInnerView() {
               cursor: "pointer",
             }}
           >
-            ↻ Refresh
+            {loading ? "Loading…" : "↻ Refresh"}
           </button>
         </div>
       </div>
+
+      {summary.turns === 0 && range !== "all" && (
+        <div role="status" style={{ ...CARD, margin: "12px 0 0", fontSize: 13, color: "var(--dsw-alias-label-secondary, #b9b9b9)" }}>
+          No requests in the {RANGES.find((r) => r.id === range)?.label.toLowerCase()}.{" "}
+          <button
+            type="button"
+            onClick={() => setRange("all")}
+            style={{ background: "none", border: 0, padding: 0, color: "#4f85ff", cursor: "pointer", font: "inherit", textDecoration: "underline" }}
+          >
+            Show all time
+          </button>
+        </div>
+      )}
 
       {/* Prominent Centered Total Token Usage Hero (Centered above the chart) */}
       <div
